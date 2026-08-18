@@ -1,0 +1,6 @@
+{
+  "name": "Orientación Vocacional Juvenil",
+  "description": "Plataforma interactiva de orientación vocacional para jóvenes y estudiantes con tests de intereses y habilidades, catálogo de carreras profesionales, universidades, becas y perfil personalizado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
