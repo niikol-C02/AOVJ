@@ -8,7 +8,7 @@ export type ViewType =
   | 'profile'
   | 'compare';
 
-export type AuthMode = 'login' | 'register' | 'forgot-password' | 'verify-code' | 'reset-password';
+export type AuthMode = 'login' | 'register' | 'forgot-password';
 
 export interface User {
   id: string;

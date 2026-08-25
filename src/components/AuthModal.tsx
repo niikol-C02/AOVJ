@@ -23,16 +23,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState<number | ''>(17);
   const [educationLevel, setEducationLevel] = useState('Último año de Bachillerato / Secundaria');
   const [city, setCity] = useState('Ciudad de México / Bogotá');
   const [country, setCountry] = useState('Colombia');
 
-  // Recovery states
-  const [verificationCode, setVerificationCode] = useState('');
-  const [generatedSimulatedCode, setGeneratedSimulatedCode] = useState<string | null>(null);
+  // Recovery & error states
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -40,33 +37,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const resetForm = () => {
     setErrorMsg('');
-    setGeneratedSimulatedCode(null);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setIsLoading(true);
 
-    setTimeout(() => {
-      const users = StorageController.getUsers();
-      const found = users.find(
-        u => u.email.toLowerCase().trim() === email.toLowerCase().trim() && u.password === password
-      );
-
-      if (found) {
-        StorageController.setActiveUser(found);
-        onShowToast(`¡Bienvenido de nuevo, ${found.name.split(' ')[0]}!`, 'Has iniciado sesión correctamente.', 'success');
-        onSuccess(found);
+    try {
+      const result = await StorageController.loginUser(email, password);
+      if (result.user) {
+        onShowToast(`¡Bienvenido de nuevo, ${result.user.name.split(' ')[0]}!`, 'Has iniciado sesión correctamente.', 'success');
+        onSuccess(result.user);
         onClose();
       } else {
-        setErrorMsg('El correo o la contraseña no coinciden. Verifica tus datos o usa el acceso demo.');
+        setErrorMsg(result.error || 'No se pudo iniciar sesión. Verifica tus credenciales.');
       }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error al iniciar sesión.');
+    } finally {
       setIsLoading(false);
-    }, 400);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -80,151 +74,64 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    const users = StorageController.getUsers();
-    const existing = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-    if (existing) {
-      setErrorMsg('Ya existe una cuenta registrada con este correo electrónico.');
-      return;
-    }
-
     setIsLoading(true);
-    setTimeout(() => {
-      const avatarGradients = [
-        'bg-gradient-to-tr from-pink-400 to-purple-500',
-        'bg-gradient-to-tr from-purple-400 to-indigo-500',
-        'bg-gradient-to-tr from-rose-400 to-amber-500',
-        'bg-gradient-to-tr from-fuchsia-400 to-pink-500'
-      ];
-      const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
-
-      const newUser: User = {
-        id: `user-${Date.now()}`,
+    try {
+      const result = await StorageController.registerUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
         age: Number(age) || 17,
         educationLevel,
         city: city.trim(),
-        country: country.trim(),
-        avatarColor: randomGradient,
-        createdAt: new Date().toISOString(),
-        savedCareers: [],
-        savedUniversities: [],
-        savedScholarships: [],
-        testHistory: []
-      };
+        country: country.trim()
+      });
 
-      const updatedUsers = [...users, newUser];
-      StorageController.saveUsers(updatedUsers);
-      StorageController.setActiveUser(newUser);
-
-      onShowToast(
-        `¡Cuenta creada exitosamente!`,
-        `Bienvenido a VocAcción, ${newUser.name}. ¡Comienza tu test vocacional!`,
-        'success'
-      );
-      onSuccess(newUser);
-      onClose();
+      if (result.user) {
+        onShowToast(
+          `¡Cuenta creada exitosamente!`,
+          `Bienvenido a VocAcción, ${result.user.name}. ¡Comienza tu test vocacional!`,
+          'success'
+        );
+        onSuccess(result.user);
+        onClose();
+      } else {
+        setErrorMsg(result.error || 'Error al registrar tu cuenta.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error al registrar la cuenta en Firebase.');
+    } finally {
       setIsLoading(false);
-    }, 400);
+    }
   };
 
-  const handleRequestCode = (e: React.FormEvent) => {
+  const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
     if (!email.trim()) {
-      setErrorMsg('Ingresa tu correo electrónico para enviar el código.');
+      setErrorMsg('Ingresa tu correo electrónico para enviar el enlace de recuperación.');
       return;
     }
 
-    const users = StorageController.getUsers();
-    const found = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    setIsLoading(true);
+    const result = await StorageController.sendPasswordReset(email);
+    setIsLoading(false);
 
-    if (!found) {
-      setErrorMsg('No encontramos ninguna cuenta registrada con este correo.');
-      return;
-    }
-
-    const code = StorageController.createRecoveryCode(email);
-    setGeneratedSimulatedCode(code);
-    setMode('verify-code');
-
-    onShowToast(
-      'Código de recuperación generado',
-      `Tu código es: ${code}. Ingrésalo a continuación para restablecer tu contraseña.`,
-      'info'
-    );
-  };
-
-  const handleVerifyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    const isValid = StorageController.verifyRecoveryCode(email, verificationCode);
-    if (!isValid) {
-      setErrorMsg('El código de 6 dígitos es incorrecto o ha expirado. Inténtalo nuevamente.');
-      return;
-    }
-
-    setMode('reset-password');
-  };
-
-  const handleResetPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    if (password.length < 6) {
-      setErrorMsg('La nueva contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMsg('Las contraseñas no coinciden.');
-      return;
-    }
-
-    const success = StorageController.resetUserPassword(email, password);
-    if (success) {
+    if (result.success) {
       onShowToast(
-        'Contraseña restablecida con éxito',
-        'Ahora puedes iniciar sesión con tu nueva contraseña.',
+        'Correo de recuperación enviado',
+        `Revisa tu bandeja de entrada en ${email} para restablecer tu contraseña.`,
         'success'
       );
       setMode('login');
-      setPassword('');
-      setConfirmPassword('');
-      setVerificationCode('');
     } else {
-      setErrorMsg('Ocurrió un error al actualizar la contraseña. Vuelve a intentarlo.');
+      setErrorMsg(result.error || 'No pudimos enviar el correo de recuperación.');
     }
   };
 
   const handleDemoLogin = () => {
-    const users = StorageController.getUsers();
-    let demoUser = users[0];
-    if (!demoUser) {
-      demoUser = {
-        id: 'user-demo-1',
-        name: 'Camila Rodriguez',
-        email: 'camila@estudiante.edu',
-        password: 'Password123!',
-        age: 17,
-        educationLevel: 'Último año de Bachillerato / Secundaria',
-        city: 'Bogotá / CDMX',
-        country: 'Latinoamérica',
-        avatarColor: 'bg-gradient-to-tr from-pink-400 to-purple-500',
-        createdAt: '2026-08-01T10:00:00.000Z',
-        savedCareers: ['ing-software-ia', 'diseno-digital-ux-ui'],
-        savedUniversities: ['uni-nacional'],
-        savedScholarships: ['beca-lideres-del-manana'],
-        testHistory: []
-      };
-      StorageController.saveUsers([demoUser]);
-    }
-
-    StorageController.setActiveUser(demoUser);
-    onShowToast(`¡Ingresaste como ${demoUser.name}!`, 'Explora todas las funciones libremente.', 'success');
+    const demoUser = StorageController.setDemoUser();
+    onShowToast(`¡Ingresaste como ${demoUser.name}!`, 'Explorando con datos de prueba sincronizables.', 'success');
     onSuccess(demoUser);
     onClose();
   };
@@ -515,7 +422,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {mode === 'forgot-password' && (
             <form onSubmit={handleRequestCode} className="space-y-4">
               <div className="p-4 rounded-2xl bg-purple-50/80 backdrop-blur-sm border border-purple-100 text-xs text-purple-800 leading-relaxed">
-                Ingresa el correo electrónico asociado a tu cuenta de estudiante. Generaremos un código de verificación de 6 dígitos para que puedas restablecer tu contraseña.
+                Ingresa el correo electrónico asociado a tu cuenta de estudiante. Te enviaremos un enlace oficial seguro para restablecer tu contraseña.
               </div>
 
               <div>
@@ -537,9 +444,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 id="submit-request-code-btn"
                 type="submit"
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-md hover:shadow-lg backdrop-blur-sm border border-white/30 transition-all"
+                disabled={isLoading}
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-purple-600 to-pink-500 text-white shadow-md hover:shadow-lg backdrop-blur-sm border border-white/30 transition-all flex items-center justify-center gap-2"
               >
-                Enviar Código de Recuperación
+                {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Enviar Enlace de Recuperación</span>}
               </button>
 
               <div className="text-center text-xs">
@@ -554,109 +462,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   ← Volver a Iniciar Sesión
                 </button>
               </div>
-            </form>
-          )}
-
-          {/* MODE: VERIFY CODE */}
-          {mode === 'verify-code' && (
-            <form onSubmit={handleVerifyCode} className="space-y-4">
-              {generatedSimulatedCode && (
-                <div className="p-3.5 rounded-2xl bg-amber-50/85 backdrop-blur-sm border border-amber-200/80 text-amber-900 text-xs shadow-xs">
-                  <p className="font-semibold mb-1">📨 Código de verificación enviado al correo:</p>
-                  <p className="font-mono text-base font-bold tracking-widest text-pink-600 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-amber-200 text-center shadow-inner">
-                    {generatedSimulatedCode}
-                  </p>
-                  <p className="text-[11px] text-amber-700 mt-1">
-                    (Simulación de envío por email activa para pruebas en vivo)
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Código de 6 dígitos
-                </label>
-                <div className="relative">
-                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="verification-code-input"
-                    type="text"
-                    maxLength={6}
-                    required
-                    value={verificationCode}
-                    onChange={e => setVerificationCode(e.target.value.trim())}
-                    placeholder="Ej. 654321"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm font-mono tracking-wider text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400/50 shadow-xs"
-                  />
-                </div>
-              </div>
-
-              <button
-                id="submit-verify-code-btn"
-                type="submit"
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md hover:shadow-lg backdrop-blur-sm border border-white/30 transition-all"
-              >
-                Validar Código
-              </button>
-
-              <div className="text-center text-xs">
-                <button
-                  type="button"
-                  onClick={() => setMode('forgot-password')}
-                  className="text-purple-600 hover:underline font-medium"
-                >
-                  ¿No recibiste el código? Solicitar otro
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* MODE: RESET PASSWORD */}
-          {mode === 'reset-password' && (
-            <form onSubmit={handleResetPassword} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Nueva Contraseña
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="reset-new-password-input"
-                    type="password"
-                    required
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400/50 shadow-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Confirmar Nueva Contraseña
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    id="reset-confirm-password-input"
-                    type="password"
-                    required
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="Repite la contraseña"
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400/50 shadow-xs"
-                  />
-                </div>
-              </div>
-
-              <button
-                id="submit-reset-password-btn"
-                type="submit"
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md hover:shadow-lg backdrop-blur-sm border border-white/30 transition-all"
-              >
-                Guardar Nueva Contraseña e Iniciar Sesión
-              </button>
             </form>
           )}
         </div>

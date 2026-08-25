@@ -15,16 +15,19 @@ Plataforma web interactiva de **orientación vocacional y exploración académic
 | **Iconografía** | **Lucide React** | `^0.546.0` | Conjunto de iconos vectoriales consistentes y accesibles. |
 | **Animaciones e Interactividad** | **Motion** & **Canvas Confetti** | `^12.23.24` / `^1.9.4` | Transiciones fluidas, modales animados y efectos de celebración en resultados. |
 | **Visualización de Datos** | **Recharts** | `^3.10.1` | Gráficos de barras y radar para el desglose del perfil vocacional RIASEC. |
-| **Almacenamiento y Base de Datos** | **Web LocalStorage Engine** | Estructurado | Persistencia local relacional de usuarios, sesiones activas, historial de tests, favoritos y códigos OTP de recuperación. |
+| **Base de Datos & Auth en la Nube** | **Firebase (Firestore & Auth)** | `^12.x` | Base de datos NoSQL en la nube Firestore con reglas de seguridad granulares y Firebase Authentication para gestión de usuarios e inicio de sesión. |
 
 ---
 
 ## 🏗️ 2. Arquitectura de Software
 
-La aplicación está organizada bajo el patrón **Modelo-Vista-Controlador (MVC)** en el frontend para garantizar modularidad, separación de responsabilidades y facilidad de mantenimiento:
+La aplicación está organizada bajo el patrón **Modelo-Vista-Controlador (MVC)** en el frontend con soporte para persistencia en la nube:
 
 ```text
 ├── .env.example                 # Plantilla de variables de entorno
+├── firebase-applet-config.json  # Configuración del proyecto Firebase (ID, API key, Firestore Database ID)
+├── firebase-blueprint.json      # Esquema formal de datos de colecciones Firestore
+├── firestore.rules              # Reglas de seguridad declarativas de Firestore
 ├── index.html                   # Punto de entrada HTML con viewport y fuentes
 ├── metadata.json                # Metadatos y permisos del aplicativo
 ├── package.json                 # Dependencias y scripts de npm
@@ -32,14 +35,16 @@ La aplicación está organizada bajo el patrón **Modelo-Vista-Controlador (MVC)
 ├── vite.config.ts               # Configuración de Vite y plugins (React + Tailwind)
 └── src/
     ├── main.tsx                 # Entrada principal y renderizado de React
-    ├── App.tsx                  # Componente raíz y enrutador de vistas
+    ├── App.tsx                  # Componente raíz y sincronización con Firebase
     ├── index.css                # Importación global de Tailwind CSS
+    ├── lib/
+    │   └── firebase.ts          # Inicialización centralizada de Firebase App, Auth y Firestore
     ├── types/                   # Definición de tipos e interfaces TypeScript
     │   └── index.ts             # Tipos de Usuario, Carreras, Universidades, Becas y Tests
     ├── models/                  # Fuentes de datos y estructuras maestras
     │   └── data.ts              # Catálogo de Carreras, Universidades, Becas y Preguntas RIASEC
     ├── controllers/             # Lógica de negocio y persistencia
-    │   ├── StorageController.ts # Gestión CRUD de usuarios, sesiones, favoritos e historial
+    │   ├── StorageController.ts # Métodos asíncronos para Firestore (CRUD de usuarios, tests y favoritos)
     │   └── TestEngine.ts        # Algoritmo de ponderación y emparejamiento RIASEC
     ├── views/                   # Vistas principales de la plataforma
     │   ├── HomeView.tsx         # Portal de bienvenida y accesos directos
@@ -48,11 +53,11 @@ La aplicación está organizada bajo el patrón **Modelo-Vista-Controlador (MVC)
     │   ├── CareersView.tsx      # Directorio y buscador con filtros de carreras
     │   ├── UniversitiesView.tsx # Directorio de universidades públicas y privadas
     │   ├── ScholarshipsView.tsx # Directorio de becas y convocatorias
-    │   └── ProfileView.tsx      # Perfil de usuario, historial y favoritos
+    │   └── ProfileView.tsx      # Perfil de estudiante sincronizado con Firestore
     └── components/              # Componentes UI reutilizables
         ├── Navbar.tsx           # Barra de navegación principal con efecto vidrio
         ├── MobileNav.tsx        # Barra de navegación móvil inferior
-        ├── AuthModal.tsx        # Modal de Login, Registro y Recuperación de Contraseña
+        ├── AuthModal.tsx        # Modal de Login, Registro y Recuperación con Firebase Auth
         ├── CareerDetailModal.tsx# Ficha técnica completa de carrera
         ├── CareerCompareModal.tsx# Comparador simultáneo de hasta 3 carreras
         ├── UniversityDetailModal.tsx # Ficha técnica de institución universitaria
@@ -62,22 +67,22 @@ La aplicación está organizada bajo el patrón **Modelo-Vista-Controlador (MVC)
 
 ---
 
-## 🗄️ 3. Sistema de Base de Datos y Persistencia
+## 🗄️ 3. Sistema de Base de Datos y Persistencia (Firebase Firestore)
 
-La aplicación implementa una capa de persistencia a través del controlador `StorageController.ts`:
+La aplicación implementa una arquitectura cloud-first con **Firebase Firestore** y **Firebase Authentication**:
 
-1. **Gestión de Usuarios (`vocaccion_users_db_v1`)**:
-   - Registro de nuevas cuentas (Nombre, Correo, Contraseña, Edad, Nivel de Estudio, Ciudad, País).
-   - Usuario de prueba inicial (*Camila Rodríguez*) precargado para pruebas inmediatas.
-   - Modificación de datos de perfil y cambio de contraseña.
-2. **Gestión de Sesiones (`vocaccion_active_session_v1`)**:
-   - Mantiene la sesión del usuario autenticado entre recargas de página de forma reactiva.
-3. **Historial de Evaluaciones**:
-   - Guarda cada resultado de test vocacional con fecha, puntajes RIASEC detallados, fortalezas clave y lista de carreras compatibles.
-4. **Lista de Favoritos**:
-   - Almacenamiento independiente de carreras, universidades y becas guardadas por cada usuario.
-5. **Recuperación de Contraseña por Código OTP (`vocaccion_recovery_codes_v1`)**:
-   - Generación y validación de tokens numéricos de 6 dígitos con vigencia temporal (30 minutos).
+1. **Autenticación de Estudiantes (`Firebase Auth`)**:
+   - Registro de nuevas cuentas con correo y contraseña cifrada.
+   - Inicio de sesión persistente con detector reactivo `onAuthStateChanged`.
+   - Restablecimiento seguro de contraseña mediante correo electrónico oficial.
+2. **Colección de Perfiles (`/users/{userId}`)**:
+   - Almacena nombre, correo, edad, nivel de estudios actual, ciudad, país y avatar personalizado.
+3. **Colección de Favoritos (`/users/{userId}/data/favorites`)**:
+   - Almacena listas de carreras, universidades y becas guardadas por el estudiante con sincronización en tiempo real.
+4. **Subcolección de Tests Vocacionales (`/users/{userId}/tests/{testId}`)**:
+   - Guarda el historial completo de tests RIASEC realizados (puntajes por dimensión, perfil arquetípico y carreras recomendadas con % de afinidad).
+5. **Reglas de Seguridad (`firestore.rules`)**:
+   - Acceso estrictamente restringido al propio usuario autenticado (`request.auth.uid == userId`), garantizando privacidad de datos personales y confidencialidad de los resultados vocacionales.
 
 ---
 

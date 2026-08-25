@@ -1,0 +1,100 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Información de perfil del estudiante",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del usuario (Auth UID)" },
+        "name": { "type": "string", "description": "Nombre completo" },
+        "email": { "type": "string", "format": "email", "description": "Correo electrónico" },
+        "age": { "type": "number", "description": "Edad del estudiante" },
+        "educationLevel": { "type": "string", "description": "Nivel educativo actual" },
+        "city": { "type": "string", "description": "Ciudad de residencia" },
+        "country": { "type": "string", "description": "País" },
+        "avatarColor": { "type": "string", "description": "Color o gradiente de avatar" },
+        "createdAt": { "type": "string", "description": "Fecha de registro ISO" },
+        "updatedAt": { "type": "string", "description": "Fecha de última actualización" }
+      },
+      "required": ["id", "name", "email", "createdAt"]
+    },
+    "UserFavorites": {
+      "title": "UserFavorites",
+      "description": "Elementos guardados/favoritos del usuario",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del usuario (Auth UID)" },
+        "savedCareers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs de carreras favoritas"
+        },
+        "savedUniversities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs de universidades favoritas"
+        },
+        "savedScholarships": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs de becas favoritas"
+        },
+        "updatedAt": { "type": "string", "description": "Fecha de actualización ISO" }
+      },
+      "required": ["id", "savedCareers", "savedUniversities", "savedScholarships"]
+    },
+    "TestHistory": {
+      "title": "TestHistory",
+      "description": "Resultados de tests vocacionales realizados por el estudiante",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "ID del test generado" },
+        "userId": { "type": "string", "description": "ID del usuario propietario (Auth UID)" },
+        "date": { "type": "string", "description": "Fecha del test" },
+        "scores": {
+          "type": "object",
+          "description": "Puntajes RIASEC normalizados de 0 a 100"
+        },
+        "dominantTypes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Letras RIASEC dominantes"
+        },
+        "profileTitle": { "type": "string", "description": "Título del perfil vocacional" },
+        "profileDescription": { "type": "string", "description": "Descripción del perfil" },
+        "topStrengths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Fortalezas destacadas"
+        },
+        "recommendedCareers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "careerId": { "type": "string" },
+              "matchPercentage": { "type": "number" }
+            }
+          },
+          "description": "Carreras recomendadas con porcentaje de compatibilidad"
+        },
+        "createdAt": { "type": "string", "description": "Timestamp de creación" }
+      },
+      "required": ["id", "userId", "date", "scores", "dominantTypes", "profileTitle"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Documento con el perfil del usuario"
+    },
+    "/users/{userId}/data/favorites": {
+      "schema": "UserFavorites",
+      "description": "Favoritos y marcadores del usuario"
+    },
+    "/users/{userId}/tests/{testId}": {
+      "schema": "TestHistory",
+      "description": "Historial de evaluaciones vocacionales del usuario"
+    }
+  }
+}

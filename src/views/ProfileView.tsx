@@ -81,12 +81,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     );
   }
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
-    const updatedData: Partial<User> & { id: string } = {
-      id: currentUser.id,
+    const updatedData: Partial<User> = {
       name: name.trim(),
       age: Number(age) || undefined,
       educationLevel,
@@ -94,15 +93,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       country: country.trim()
     };
 
-    if (newPassword.trim().length >= 6) {
-      updatedData.password = newPassword.trim();
-    }
-
-    const res = StorageController.updateUser(updatedData);
+    const res = await StorageController.updateUser(currentUser.id, updatedData);
     if (res) {
       onUpdateUser(res);
-      onShowToast('Perfil actualizado con éxito', 'Tus datos personales se han guardado correctamente.', 'success');
+      onShowToast('Perfil actualizado en Firebase', 'Tus datos personales se han sincronizado con Firestore.', 'success');
       setNewPassword('');
+    } else {
+      onShowToast('Error al actualizar', 'No se pudieron guardar los cambios en la base de datos.', 'error');
     }
     setIsSaving(false);
   };

@@ -53,19 +53,20 @@ export default function App() {
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  // Initialize storage & session
+  // Initialize Firebase Auth state listener
   useEffect(() => {
-    const user = StorageController.getActiveUser();
-    if (user) {
-      setCurrentUser(user);
-    } else {
-      // Load initial demo user for smooth first-time preview exploration
-      const users = StorageController.getUsers();
-      if (users.length > 0) {
-        setCurrentUser(users[0]);
-        StorageController.setActiveUser(users[0]);
+    // Set initial demo user for quick visual preview until user signs in or connects
+    setCurrentUser(StorageController.setDemoUser());
+
+    const unsubscribe = StorageController.initAuthListener((user) => {
+      if (user) {
+        setCurrentUser(user);
       }
-    }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const showToast = (title: string, description?: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -94,23 +95,23 @@ export default function App() {
     setIsAuthOpen(false);
   };
 
-  const handleLogout = () => {
-    StorageController.setActiveUser(null);
+  const handleLogout = async () => {
+    await StorageController.logout();
     setCurrentUser(null);
     showToast('Sesión cerrada', 'Has salido de tu cuenta de VocAcción.', 'info');
     setCurrentView('home');
   };
 
   // Test completed handler
-  const handleCompleteTest = (result: TestResult) => {
+  const handleCompleteTest = async (result: TestResult) => {
     if (currentUser) {
-      const updated = StorageController.addTestResultToUser(currentUser.id, result);
+      const updated = await StorageController.addTestResultToUser(currentUser.id, result);
       if (updated) {
         setCurrentUser(updated);
       }
     }
     showToast(
-      '¡Test Completado con Éxito!',
+      '¡Test Guardado en la Base de Datos!',
       `Tu perfil dominante es ${result.profileTitle}. Descubre tus carreras compatibles.`,
       'success'
     );
@@ -118,51 +119,51 @@ export default function App() {
   };
 
   // Bookmark / Favorite Toggles
-  const handleToggleFavoriteCareer = (careerId: string) => {
+  const handleToggleFavoriteCareer = async (careerId: string) => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
     }
-    const updated = StorageController.toggleFavorite(currentUser.id, 'career', careerId);
+    const updated = await StorageController.toggleFavorite(currentUser.id, 'career', careerId);
     if (updated) {
       setCurrentUser(updated);
       const isNowSaved = updated.savedCareers?.includes(careerId);
       showToast(
-        isNowSaved ? 'Carrera guardada' : 'Carrera removida',
+        isNowSaved ? 'Carrera guardada en Firebase' : 'Carrera removida',
         isNowSaved ? 'Se agregó a tus carreras favoritas en tu perfil.' : 'Se quitó de tus favoritos.',
         'info'
       );
     }
   };
 
-  const handleToggleFavoriteUniversity = (uniId: string) => {
+  const handleToggleFavoriteUniversity = async (uniId: string) => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
     }
-    const updated = StorageController.toggleFavorite(currentUser.id, 'university', uniId);
+    const updated = await StorageController.toggleFavorite(currentUser.id, 'university', uniId);
     if (updated) {
       setCurrentUser(updated);
       const isNowSaved = updated.savedUniversities?.includes(uniId);
       showToast(
-        isNowSaved ? 'Universidad guardada' : 'Universidad removida',
+        isNowSaved ? 'Universidad guardada en Firebase' : 'Universidad removida',
         isNowSaved ? 'Se agregó a tus universidades de interés.' : 'Se quitó de tu lista.',
         'info'
       );
     }
   };
 
-  const handleToggleFavoriteScholarship = (schId: string) => {
+  const handleToggleFavoriteScholarship = async (schId: string) => {
     if (!currentUser) {
       handleOpenAuth('login');
       return;
     }
-    const updated = StorageController.toggleFavorite(currentUser.id, 'scholarship', schId);
+    const updated = await StorageController.toggleFavorite(currentUser.id, 'scholarship', schId);
     if (updated) {
       setCurrentUser(updated);
       const isNowSaved = updated.savedScholarships?.includes(schId);
       showToast(
-        isNowSaved ? 'Beca guardada' : 'Beca removida',
+        isNowSaved ? 'Beca guardada en Firebase' : 'Beca removida',
         isNowSaved ? 'Se agregó a tus becas de interés en el perfil.' : 'Se quitó de tus becas.',
         'info'
       );
