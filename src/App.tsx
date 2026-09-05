@@ -17,8 +17,10 @@ import { UniversityDetailModal } from './components/UniversityDetailModal';
 import { ScholarshipDetailModal } from './components/ScholarshipDetailModal';
 import { CareerCompareModal } from './components/CareerCompareModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { Compass, RefreshCw } from 'lucide-react';
 
 // Views
+import { WelcomeAuthView } from './views/WelcomeAuthView';
 import { HomeView } from './views/HomeView';
 import { TestView } from './views/TestView';
 import { ResultsView } from './views/ResultsView';
@@ -33,6 +35,7 @@ export default function App() {
 
   // User session
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   // Auth modal
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -55,13 +58,9 @@ export default function App() {
 
   // Initialize Firebase Auth state listener
   useEffect(() => {
-    // Set initial demo user for quick visual preview until user signs in or connects
-    setCurrentUser(StorageController.setDemoUser());
-
     const unsubscribe = StorageController.initAuthListener((user) => {
-      if (user) {
-        setCurrentUser(user);
-      }
+      setCurrentUser(user);
+      setIsAuthChecking(false);
     });
 
     return () => {
@@ -213,6 +212,44 @@ export default function App() {
 
   // Selected compared career objects
   const comparedCareerObjects = CAREERS_DATA.filter(c => comparedCareerIds.includes(c.id));
+
+  // 1. Loading screen while Firebase Auth verifies existing session
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center font-['Plus_Jakarta_Sans',sans-serif] p-4">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
+          <div className="w-14 h-14 rounded-3xl bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-600 shadow-xl flex items-center justify-center text-white">
+            <Compass className="w-8 h-8 animate-spin" style={{ animationDuration: '4s' }} />
+          </div>
+          <div className="text-center">
+            <h2 className="text-2xl font-black text-slate-900 font-['Outfit',sans-serif]">
+              Voc<span className="text-pink-600">Acción</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-2 justify-center font-medium">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-pink-500" />
+              <span>Verificando acceso a tu cuenta...</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Initial Gate: When unauthenticated, show the Welcome & Authentication Screen
+  if (!currentUser) {
+    return (
+      <>
+        <WelcomeAuthView
+          onAuthSuccess={handleAuthSuccess}
+          onShowToast={showToast}
+        />
+        <ToastContainer
+          toasts={toasts}
+          onDismiss={dismissToast}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen relative flex flex-col font-['Plus_Jakarta_Sans',sans-serif] text-slate-800 antialiased selection:bg-pink-200 selection:text-purple-900 pb-16 lg:pb-0">

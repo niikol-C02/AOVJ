@@ -4,6 +4,8 @@ import {
   signOut, 
   onAuthStateChanged,
   sendPasswordResetEmail,
+  signInWithPopup,
+  GoogleAuthProvider,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -82,19 +84,59 @@ export class StorageController {
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
       if (fbUser) {
         try {
-          const user = await this.getUserProfile(fbUser.uid);
-          if (user) {
-            this.localFallbackUser = user;
-            callback(user);
-            return;
+          let user = await this.getUserProfile(fbUser.uid);
+          if (!user) {
+            // New user via provider without Firestore doc yet - create fresh clean profile
+            const avatarGradients = [
+              'bg-gradient-to-tr from-pink-400 to-purple-500',
+              'bg-gradient-to-tr from-purple-400 to-indigo-500',
+              'bg-gradient-to-tr from-rose-400 to-amber-500',
+              'bg-gradient-to-tr from-fuchsia-400 to-pink-500'
+            ];
+            const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
+            const newUserDoc = {
+              id: fbUser.uid,
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'Estudiante',
+              email: fbUser.email || '',
+              age: 17,
+              educationLevel: 'Último año de Bachillerato / Secundaria',
+              city: '',
+              country: 'Colombia',
+              avatarColor: randomGradient,
+              createdAt: new Date().toISOString()
+            };
+            try {
+              await setDoc(doc(db, USERS_COLLECTION, fbUser.uid), newUserDoc);
+              await setDoc(doc(db, USERS_COLLECTION, fbUser.uid, 'data', 'favorites'), {
+                id: fbUser.uid,
+                savedCareers: [],
+                savedUniversities: [],
+                savedScholarships: [],
+                updatedAt: new Date().toISOString()
+              });
+            } catch (errCreate) {
+              console.warn('Could not auto-create user profile:', errCreate);
+            }
+            user = {
+              ...newUserDoc,
+              savedCareers: [],
+              savedUniversities: [],
+              savedScholarships: [],
+              testHistory: [],
+              answeredQuestionIds: []
+            };
           }
+          this.localFallbackUser = user;
+          callback(user);
+          return;
         } catch (err) {
           console.error('Error fetching user profile from Firestore:', err);
         }
       }
 
-      // If no auth user or error, notify with fallback or null
-      callback(this.localFallbackUser);
+      // If no auth user or logged out, pass null (requires login)
+      this.localFallbackUser = null;
+      callback(null);
     });
 
     return () => {
@@ -264,19 +306,122 @@ export class StorageController {
   }
 
   /**
+   * Sign in with Google Auth (real popup authentication)
+   */
+  static async loginWithGoogle(): Promise<{ user: User | null; error?: string }> {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const userCredential = await signInWithPopup(auth, provider);
+      const fbUser = userCredential.user;
+      const uid = fbUser.uid;
+
+      let fullUser = await this.getUserProfile(uid);
+
+      if (!fullUser) {
+        // First-time user via Google: create a completely fresh profile with no other user's data
+        const avatarGradients = [
+          'bg-gradient-to-tr from-pink-400 to-purple-500',
+          'bg-gradient-to-tr from-purple-400 to-indigo-500',
+          'bg-gradient-to-tr from-rose-400 to-amber-500',
+          'bg-gradient-to-tr from-fuchsia-400 to-pink-500'
+        ];
+        const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
+
+        const newUserDoc = {
+          id: uid,
+          name: fbUser.displayName || 'Estudiante VocAcción',
+          email: fbUser.email || '',
+          age: 17,
+          educationLevel: 'Último año de Bachillerato / Secundaria',
+          city: '',
+          country: 'Colombia',
+          avatarColor: randomGradient,
+          createdAt: new Date().toISOString()
+        };
+
+        await setDoc(doc(db, USERS_COLLECTION, uid), newUserDoc);
+
+        // Initialize clean favorites document
+        await setDoc(doc(db, USERS_COLLECTION, uid, 'data', 'favorites'), {
+          id: uid,
+          savedCareers: [],
+          savedUniversities: [],
+          savedScholarships: [],
+          updatedAt: new Date().toISOString()
+        });
+
+        fullUser = {
+          ...newUserDoc,
+          savedCareers: [],
+          savedUniversities: [],
+          savedScholarships: [],
+          testHistory: [],
+          answeredQuestionIds: []
+        };
+      }
+
+      this.localFallbackUser = fullUser;
+      return { user: fullUser };
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      let errorMsg = 'No se pudo iniciar sesión con Google.';
+      if (err.code === 'auth/popup-closed-by-user') {
+        errorMsg = 'El inicio de sesión fue cancelado (cerraste la ventana de Google).';
+      } else if (err.code === 'auth/popup-blocked') {
+        errorMsg = 'El navegador bloqueó la ventana emergente de Google. Habilita ventanas emergentes e inténtalo de nuevo.';
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        errorMsg = 'Operación cancelada.';
+      } else if (err.code === 'auth/account-exists-with-different-credential') {
+        errorMsg = 'Ya existe una cuenta con este correo pero con otro método de inicio de sesión.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      return { user: null, error: errorMsg };
+    }
+  }
+
+  /**
    * Sign in with Firebase Auth email & password
    */
   static async loginUser(email: string, password: string): Promise<{ user: User | null; error?: string }> {
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = userCredential.user.uid;
-      const fullUser = await this.getUserProfile(uid);
+      let fullUser = await this.getUserProfile(uid);
 
-      if (fullUser) {
-        this.localFallbackUser = fullUser;
-        return { user: fullUser };
+      if (!fullUser) {
+        const newUserDoc = {
+          id: uid,
+          name: userCredential.user.displayName || email.split('@')[0] || 'Estudiante',
+          email: userCredential.user.email || email.trim().toLowerCase(),
+          age: 17,
+          educationLevel: 'Último año de Bachillerato / Secundaria',
+          city: '',
+          country: 'Colombia',
+          avatarColor: 'bg-gradient-to-tr from-pink-400 to-purple-500',
+          createdAt: new Date().toISOString()
+        };
+        await setDoc(doc(db, USERS_COLLECTION, uid), newUserDoc);
+        await setDoc(doc(db, USERS_COLLECTION, uid, 'data', 'favorites'), {
+          id: uid,
+          savedCareers: [],
+          savedUniversities: [],
+          savedScholarships: [],
+          updatedAt: new Date().toISOString()
+        });
+        fullUser = {
+          ...newUserDoc,
+          savedCareers: [],
+          savedUniversities: [],
+          savedScholarships: [],
+          testHistory: [],
+          answeredQuestionIds: []
+        };
       }
-      return { user: null, error: 'No se encontraron datos del perfil.' };
+
+      this.localFallbackUser = fullUser;
+      return { user: fullUser };
     } catch (err: any) {
       console.error('Firebase login error:', err);
       let errorMsg = 'Correo o contraseña incorrectos.';
@@ -284,6 +429,8 @@ export class StorageController {
         errorMsg = 'El correo o la contraseña no coinciden. Verifica tus credenciales.';
       } else if (err.code === 'auth/too-many-requests') {
         errorMsg = 'Demasiados intentos fallidos. Intenta más tarde o restablece tu contraseña.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMsg = 'El formato del correo electrónico no es válido.';
       }
       return { user: null, error: errorMsg };
     }
