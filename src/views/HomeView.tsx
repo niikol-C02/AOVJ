@@ -1,5 +1,6 @@
 import React from 'react';
 import { Career, TestResult, User, ViewType } from '../types';
+import { DailyTipCard } from '../components/DailyTipCard';
 import { 
   Sparkles, 
   Compass, 
@@ -345,29 +346,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
       </section>
 
-      {/* Inspirational Student Advice Card */}
-      <section className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-purple-950/90 via-indigo-950/90 to-slate-950/90 backdrop-blur-2xl border border-white/20 text-white shadow-xl space-y-4">
-        <div className="flex items-center gap-2 text-pink-300 text-xs font-bold uppercase tracking-wider">
-          <Star className="w-4 h-4 fill-pink-300" />
-          <span>Consejo Vocacional del Día</span>
-        </div>
-        <blockquote className="text-base sm:text-lg font-medium text-purple-100 italic leading-relaxed">
-          "Elegir una carrera no es solo buscar qué estudiar, sino descubrir cómo quieres transformar el mundo con lo que mejor sabes hacer y lo que más disfrutas."
-        </blockquote>
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-purple-800/60">
-          <p className="text-xs text-purple-300">
-            Orientación Vocacional VocAcción • Basado en el Modelo Psicológico de Holland (RIASEC)
-          </p>
-          {!hasCompletedTest && (
-            <button
-              onClick={() => onNavigate('test')}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-95 text-white font-bold text-xs shadow-md border border-white/30 transition-all"
-            >
-              Comenzar Test Ahora
-            </button>
-          )}
-        </div>
-      </section>
+      {/* Dynamic Rotating Student Advice Card (Changes Daily) */}
+      <DailyTipCard onNavigateTest={() => onNavigate('test')} />
     </div>
   );
 };

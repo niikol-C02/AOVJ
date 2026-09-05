@@ -25,6 +25,28 @@ export interface User {
   savedUniversities: string[];
   savedScholarships: string[];
   testHistory: TestResult[];
+  answeredQuestionIds?: number[];
+}
+
+export type AdviceCategory = 
+  | 'Orientación vocacional'
+  | 'Educación'
+  | 'Elección de carrera'
+  | 'Motivación'
+  | 'Organización para estudiar'
+  | 'Futuro profesional';
+
+export interface DailyAdvice {
+  id: string;
+  dayIndex: number;
+  category: AdviceCategory;
+  title: string;
+  quote: string;
+  practicalTip: string;
+  author: string;
+  color: string;
+  badgeBg: string;
+  iconName: string;
 }
 
 export type RiasecType = 'R' | 'I' | 'A' | 'S' | 'E' | 'C';
@@ -58,6 +80,7 @@ export interface TestResult {
   profileTitle: string;
   profileDescription: string;
   topStrengths: string[];
+  questionIdsAnswered?: number[];
   recommendedCareers: {
     careerId: string;
     matchPercentage: number;

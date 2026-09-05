@@ -153,6 +153,16 @@ export class StorageController {
         console.warn('Could not read tests subcollection:', e);
       }
 
+      // Collect answered question IDs across all test history
+      const answeredFromTests: number[] = [];
+      testHistory.forEach(t => {
+        if (t.questionIdsAnswered && Array.isArray(t.questionIdsAnswered)) {
+          answeredFromTests.push(...t.questionIdsAnswered);
+        }
+      });
+      const existingAnswered = Array.isArray(userData.answeredQuestionIds) ? userData.answeredQuestionIds : [];
+      const combinedAnsweredIds = Array.from(new Set([...existingAnswered, ...answeredFromTests]));
+
       const fullUser: User = {
         id: uid,
         name: userData.name || 'Estudiante',
@@ -166,7 +176,8 @@ export class StorageController {
         savedCareers,
         savedUniversities,
         savedScholarships,
-        testHistory
+        testHistory,
+        answeredQuestionIds: combinedAnsweredIds
       };
 
       return fullUser;
@@ -350,19 +361,18 @@ export class StorageController {
    */
   static async addTestResultToUser(userId: string, testResult: TestResult): Promise<User | null> {
     try {
+      const newlyAnswered = testResult.questionIdsAnswered || [];
+
       if (userId === DEMO_USER_ID) {
         if (!this.localFallbackUser) this.localFallbackUser = { ...INITIAL_DEMO_USER };
         const updatedHistory = [testResult, ...(this.localFallbackUser.testHistory || [])];
-        const updatedCareers = [...this.localFallbackUser.savedCareers];
-        testResult.recommendedCareers.slice(0, 3).forEach(rc => {
-          if (!updatedCareers.includes(rc.careerId)) {
-            updatedCareers.push(rc.careerId);
-          }
-        });
+        const prevAnswered = this.localFallbackUser.answeredQuestionIds || [];
+        const mergedAnswered = Array.from(new Set([...prevAnswered, ...newlyAnswered]));
+
         this.localFallbackUser = {
           ...this.localFallbackUser,
           testHistory: updatedHistory,
-          savedCareers: updatedCareers
+          answeredQuestionIds: mergedAnswered
         };
         return this.localFallbackUser;
       }
@@ -375,27 +385,21 @@ export class StorageController {
         createdAt: new Date().toISOString()
       });
 
-      // Also merge top careers into user favorites if helpful
-      const user = await this.getUserProfile(userId);
-      if (user) {
-        const updatedCareers = [...user.savedCareers];
-        let hasNew = false;
-        testResult.recommendedCareers.slice(0, 3).forEach(rc => {
-          if (!updatedCareers.includes(rc.careerId)) {
-            updatedCareers.push(rc.careerId);
-            hasNew = true;
+      // Update answeredQuestionIds on the main user document
+      if (newlyAnswered.length > 0) {
+        try {
+          const userDocRef = doc(db, USERS_COLLECTION, userId);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            const currentAnswered = userSnap.data().answeredQuestionIds || [];
+            const merged = Array.from(new Set([...currentAnswered, ...newlyAnswered]));
+            await updateDoc(userDocRef, {
+              answeredQuestionIds: merged,
+              updatedAt: new Date().toISOString()
+            });
           }
-        });
-
-        if (hasNew) {
-          const favDocRef = doc(db, USERS_COLLECTION, userId, 'data', 'favorites');
-          await setDoc(favDocRef, {
-            id: userId,
-            savedCareers: updatedCareers,
-            savedUniversities: user.savedUniversities,
-            savedScholarships: user.savedScholarships,
-            updatedAt: new Date().toISOString()
-          }, { merge: true });
+        } catch (err) {
+          console.warn('Could not update answeredQuestionIds on user doc:', err);
         }
       }
 

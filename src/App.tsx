@@ -249,6 +249,7 @@ export default function App() {
 
         {currentView === 'test' && (
           <TestView
+            currentUser={currentUser}
             onCompleteTest={handleCompleteTest}
             onShowToast={showToast}
           />

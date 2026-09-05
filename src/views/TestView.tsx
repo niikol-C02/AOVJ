@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Question, TestResult } from '../types';
-import { VOCATIONAL_QUESTIONS, RIASEC_DIMENSIONS } from '../models/data';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Question, TestResult, User } from '../types';
 import { TestEngine } from '../controllers/TestEngine';
 import confetti from 'canvas-confetti';
 import { 
@@ -8,31 +7,51 @@ import {
   ArrowRight, 
   ArrowLeft, 
   CheckCircle2, 
-  HelpCircle, 
-  RotateCcw, 
-  Award, 
   Flame, 
-  BookOpen, 
   Heart, 
   Zap, 
-  Smile
+  Smile, 
+  Award, 
+  RotateCw, 
+  SlidersHorizontal,
+  Info,
+  ShieldCheck
 } from 'lucide-react';
 
 interface TestViewProps {
+  currentUser: User | null;
   onCompleteTest: (result: TestResult) => void;
   onShowToast: (title: string, description?: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast }) => {
-  // Test mode: 'full' (30 questions) vs 'quick' (18 questions)
+type ScaleMode = 'standard' | 'enthusiasm' | 'simple';
+
+export const TestView: React.FC<TestViewProps> = ({ currentUser, onCompleteTest, onShowToast }) => {
+  // Test mode: 'full' (30 questions: 5 per RIASEC) vs 'quick' (18 questions: 3 per RIASEC)
   const [testMode, setTestMode] = useState<'full' | 'quick'>('full');
-  const questionsToUse = testMode === 'full' 
-    ? VOCATIONAL_QUESTIONS 
-    : VOCATIONAL_QUESTIONS.filter((_, idx) => idx % 2 === 0 || idx > 20);
+  const [scaleMode, setScaleMode] = useState<ScaleMode>('standard');
+  const [generationSeed, setGenerationSeed] = useState(0);
+
+  // Derive already answered question IDs
+  const answeredQuestionIds = useMemo(() => {
+    return currentUser?.answeredQuestionIds || [];
+  }, [currentUser]);
+
+  // Dynamically select fresh questions avoiding repeating ones previously answered
+  const questionsToUse = useMemo(() => {
+    const perDim = testMode === 'full' ? 5 : 3;
+    return TestEngine.selectQuestionsForUser(answeredQuestionIds, perDim);
+  }, [answeredQuestionIds, testMode, generationSeed]);
 
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
+
+  // Reset progress if test questions change
+  useEffect(() => {
+    setAnswers({});
+    setCurrentStepIndex(0);
+  }, [testMode, generationSeed]);
 
   // Group questions by area for tabs
   const areas = [
@@ -44,7 +63,7 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
 
   const totalQuestions = questionsToUse.length;
   const answeredCount = Object.keys(answers).length;
-  const progressPercent = Math.round((answeredCount / totalQuestions) * 100);
+  const progressPercent = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
   const currentQuestion = questionsToUse[currentStepIndex];
   const currentArea = currentQuestion ? currentQuestion.area : 'intereses';
@@ -69,14 +88,13 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
     if (answeredCount < totalQuestions) {
       onShowToast(
         'Faltan preguntas por responder',
-        `Has respondido ${answeredCount} de ${totalQuestions}. Completa las restantes para obtener la mayor precisión.`,
+        `Has respondido ${answeredCount} de ${totalQuestions}. Te recomendamos completar todas para la mayor precisión.`,
         'info'
       );
     }
 
     setIsCalculating(true);
 
-    // Launch celebratory confetti
     try {
       confetti({
         particleCount: 80,
@@ -86,19 +104,52 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
     } catch (e) {}
 
     setTimeout(() => {
-      const result = TestEngine.calculateResults(answers, questionsToUse);
+      const userContext = currentUser ? {
+        city: currentUser.city,
+        educationLevel: currentUser.educationLevel
+      } : undefined;
+
+      const result = TestEngine.calculateResults(answers, questionsToUse, userContext);
       onCompleteTest(result);
       setIsCalculating(false);
     }, 600);
   };
 
-  const ratingOptions = [
-    { value: 1, label: 'Nada afín', emoji: '😣', desc: 'No me gusta / En desacuerdo' },
-    { value: 2, label: 'Poco', emoji: '🙁', desc: 'Poco interés' },
-    { value: 3, label: 'Neutral', emoji: '😐', desc: 'Me da igual / Regular' },
-    { value: 4, label: 'Bastante', emoji: '🙂', desc: 'Me agrada / De acuerdo' },
-    { value: 5, label: '¡Totalmente!', emoji: '🤩', desc: '¡Me encanta / Muy afín!' }
-  ];
+  const handleRegenerateQuestions = () => {
+    setGenerationSeed(prev => prev + 1);
+    onShowToast('Preguntas renovadas', 'Se ha seleccionado una nueva combinación de preguntas del banco amplio.', 'success');
+  };
+
+  // Multiple response options styles as requested
+  const getRatingOptions = () => {
+    switch (scaleMode) {
+      case 'enthusiasm':
+        return [
+          { value: 1, label: 'Nada afín', emoji: '🥱', desc: 'No me llama la atención' },
+          { value: 2, label: 'Poco interés', emoji: '🤔', desc: 'Rara vez me atrae' },
+          { value: 3, label: 'Moderado', emoji: '🙂', desc: 'Aceptable o neutral' },
+          { value: 4, label: 'Me atrae', emoji: '😃', desc: 'Me gustaría aprenderlo' },
+          { value: 5, label: '¡Me apasiona!', emoji: '🔥', desc: '¡Me encantaría dedicarme a ello!' }
+        ];
+      case 'simple':
+        return [
+          { value: 1, label: 'En desacuerdo', emoji: '👎', desc: 'No va conmigo' },
+          { value: 3, label: 'Indiferente', emoji: '⚖️', desc: 'Neutro o a veces' },
+          { value: 5, label: 'De acuerdo', emoji: '👍', desc: 'Totalmente identificado' }
+        ];
+      case 'standard':
+      default:
+        return [
+          { value: 1, label: 'Nada afín', emoji: '😣', desc: 'No me gusta / En desacuerdo' },
+          { value: 2, label: 'Poco', emoji: '🙁', desc: 'Poco interés' },
+          { value: 3, label: 'Neutral', emoji: '😐', desc: 'Me da igual / Regular' },
+          { value: 4, label: 'Bastante', emoji: '🙂', desc: 'Me agrada / De acuerdo' },
+          { value: 5, label: '¡Totalmente!', emoji: '🤩', desc: '¡Me encanta / Muy afín!' }
+        ];
+    }
+  };
+
+  const ratingOptions = getRatingOptions();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -108,49 +159,82 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/80 backdrop-blur-md border border-purple-200/80 text-xs font-bold text-purple-800 mb-2 shadow-xs">
               <Sparkles className="w-3.5 h-3.5 text-pink-500" />
-              <span>Cuestionario Vocacional Interactivo</span>
+              <span>Cuestionario Vocacional Holland (RIASEC)</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-['Outfit',sans-serif]">
               Test de Orientación Vocacional
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 max-w-xl mt-1">
-              Descubre qué carreras y áreas profesionales encajan con tu forma de ser, tus gustos y tus habilidades. Responde con sinceridad: no hay respuestas correctas o incorrectas.
+              Seleccionamos preguntas dinámicas de nuestro banco de 60 ítems para identificar con precisión tus intereses y talentos sin repetir preguntas de tus tests anteriores.
             </p>
           </div>
 
           {/* Test length switcher */}
-          <div className="flex items-center p-1 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 shadow-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center p-1 bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 shadow-xs">
+              <button
+                onClick={() => setTestMode('full')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  testMode === 'full'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-purple-600'
+                }`}
+              >
+                Test Completo (30 preg.)
+              </button>
+              <button
+                onClick={() => setTestMode('quick')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  testMode === 'quick'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-purple-600'
+                }`}
+              >
+                Test Rápido (18 preg.)
+              </button>
+            </div>
+
             <button
-              onClick={() => {
-                setTestMode('full');
-                setCurrentStepIndex(0);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                testMode === 'full'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-purple-600'
-              }`}
+              onClick={handleRegenerateQuestions}
+              className="p-2 rounded-2xl bg-white/70 hover:bg-white border border-white/80 text-slate-700 hover:text-purple-600 transition-all shadow-xs"
+              title="Cargar otra combinación de preguntas no repetidas"
             >
-              Test Completo (30 preg.)
-            </button>
-            <button
-              onClick={() => {
-                setTestMode('quick');
-                setCurrentStepIndex(0);
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                testMode === 'quick'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-purple-600'
-              }`}
-            >
-              Test Rápido (18 preg.)
+              <RotateCw className="w-4 h-4" />
             </button>
           </div>
         </div>
 
+        {/* Dynamic Bank & Non-Repeat Info Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 pb-1 border-t border-purple-100/70 text-xs">
+          <div className="flex items-center gap-2 text-slate-600">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>
+              {answeredQuestionIds.length > 0 ? (
+                <>Has respondido <strong>{answeredQuestionIds.length}</strong> preguntas en tests previos. Este test prioriza preguntas no respondidas para garantizar variedad.</>
+              ) : (
+                <>Banco de <strong>60 preguntas científicas RIASEC</strong> activas. Preguntas distribuidas equilibradamente.</>
+              )}
+            </span>
+          </div>
+
+          {/* Scale style switcher */}
+          <div className="flex items-center gap-1.5 text-slate-500">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-purple-500" />
+            <span className="text-[11px] font-semibold">Estilo de respuestas:</span>
+            <select
+              value={scaleMode}
+              onChange={(e) => setScaleMode(e.target.value as ScaleMode)}
+              className="bg-white/80 border border-purple-200 rounded-lg px-2 py-0.5 text-xs text-purple-900 font-semibold focus:outline-none"
+            >
+              <option value="standard">Escala Afinidad (1 a 5)</option>
+              <option value="enthusiasm">Escala Entusiasmo (1 a 5)</option>
+              <option value="simple">Escala Simplificada (3 opciones)</option>
+            </select>
+          </div>
+        </div>
+
         {/* Progress Bar & Status */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-2 pt-1">
           <div className="flex items-center justify-between text-xs font-bold text-slate-700">
             <span className="flex items-center gap-1.5">
               <Flame className="w-4 h-4 text-pink-500" />
@@ -198,7 +282,7 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
               Pregunta {currentStepIndex + 1} de {totalQuestions}
             </span>
             <span className="text-xs text-slate-500 capitalize font-medium">
-              Área: {currentQuestion.area}
+              Dimensión RIASEC: {currentQuestion.category} ({currentQuestion.area})
             </span>
           </div>
 
@@ -208,12 +292,12 @@ export const TestView: React.FC<TestViewProps> = ({ onCompleteTest, onShowToast 
               "{currentQuestion.text}"
             </h2>
             <p className="text-xs text-slate-500 mt-3">
-              Selecciona el nivel que mejor represente qué tanto te identifica esta afirmación:
+              Elige la opción que mejor describa tu preferencia o afinidad personal:
             </p>
           </div>
 
-          {/* 5-Point Interactive Rating Scale with Glass Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+          {/* Interactive Rating Scale with Glass Cards */}
+          <div className={`grid gap-3 ${scaleMode === 'simple' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-5'}`}>
             {ratingOptions.map(opt => {
               const isSelected = answers[currentQuestion.id] === opt.value;
               return (

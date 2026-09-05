@@ -1,13 +1,31 @@
-import { CAREERS_DATA, RIASEC_DIMENSIONS } from '../models/data';
+import { CAREERS_DATA, RIASEC_DIMENSIONS, UNIVERSITIES_DATA } from '../models/data';
+import { selectFreshQuestionsForUser } from '../models/questionsData';
 import { Career, Question, RiasecType, TestResult } from '../types';
 
+export interface UserPersonalizationContext {
+  city?: string;
+  educationLevel?: string;
+}
+
 export class TestEngine {
+  /**
+   * Selects fresh, non-repeating questions for the user from the comprehensive question bank.
+   */
+  static selectQuestionsForUser(answeredQuestionIds: number[] = [], questionsPerDimension: number = 3): Question[] {
+    return selectFreshQuestionsForUser(answeredQuestionIds, questionsPerDimension);
+  }
+
   /**
    * Calculates RIASEC profile and career recommendations based on answer map
    * @param answers Record<number, number> map of QuestionID -> rating (1 to 5)
    * @param questions List of questions used in the test
+   * @param userContext Optional user profile context (city, education level) for personalized matching
    */
-  static calculateResults(answers: Record<number, number>, questions: Question[]): TestResult {
+  static calculateResults(
+    answers: Record<number, number>,
+    questions: Question[],
+    userContext?: UserPersonalizationContext
+  ): TestResult {
     // 1. Accumulate scores per category
     const categoryTotals: Record<RiasecType, number> = {
       R: 0,
@@ -52,8 +70,8 @@ export class TestEngine {
     // 4. Determine Profile Title and Narrative Description
     const profileInfo = this.getProfileNarrative(primary, secondary);
 
-    // 5. Match every career with a weighted algorithm
-    const recommendedCareers = this.calculateCareerMatches(scores, CAREERS_DATA);
+    // 5. Match every career with a weighted algorithm + profile context
+    const recommendedCareers = this.calculateCareerMatches(scores, CAREERS_DATA, userContext);
 
     // 6. Assemble key strengths
     const topStrengths = this.extractStrengths(dominantTypes);
@@ -66,21 +84,41 @@ export class TestEngine {
       profileTitle: profileInfo.title,
       profileDescription: profileInfo.description,
       topStrengths,
+      questionIdsAnswered: questions.map(q => q.id),
       recommendedCareers
     };
   }
 
-  private static calculateCareerMatches(
+  public static calculateCareerMatches(
     scores: Record<RiasecType, number>,
-    careers: Career[]
+    careers: Career[],
+    userContext?: UserPersonalizationContext
   ): { careerId: string; matchPercentage: number }[] {
     const matches = careers.map(career => {
       const primaryScore = scores[career.riasecPrimary] || 50;
       const secondaryScore = scores[career.riasecSecondary] || 50;
 
       // Primary dimension has 60% weight, secondary has 30%, overall balance has 10%
-      const baseMatch = (primaryScore * 0.6) + (secondaryScore * 0.3) + 10;
-      
+      let baseMatch = (primaryScore * 0.6) + (secondaryScore * 0.3) + 10;
+
+      // Contextual personalization: City & Region availability
+      if (userContext?.city) {
+        const userCityNorm = userContext.city.toLowerCase().trim();
+        // Check if any suggested university for this career is located in the user's city/region
+        const hasLocalUni = career.suggestedUniversities.some(uniId => {
+          const uni = UNIVERSITIES_DATA.find(u => u.id === uniId);
+          return uni && (
+            uni.city.toLowerCase().includes(userCityNorm) ||
+            userCityNorm.includes(uni.city.toLowerCase().split(' ')[0])
+          );
+        });
+
+        if (hasLocalUni) {
+          // Slight bonus for local availability and access
+          baseMatch += 2;
+        }
+      }
+
       // Bound between 45% and 99%
       const clampedMatch = Math.min(99, Math.max(45, Math.round(baseMatch)));
 
@@ -129,7 +167,7 @@ export class TestEngine {
     };
 
     const key = `${primary}-${secondary}`;
-    const fallbackTitle = `${RIASEC_DIMENSIONS[primary].shortName} - ${RIASEC_DIMENSIONS[secondary].shortName}`;
+    const fallbackTitle = `${RIASEC_DIMENSIONS[primary]?.shortName || primary} - ${RIASEC_DIMENSIONS[secondary]?.shortName || secondary}`;
     const title = titles[key] || fallbackTitle;
 
     const descriptions: Record<RiasecType, string> = {
@@ -141,7 +179,12 @@ export class TestEngine {
       C: 'Destacas por tu disciplina, organización milimétrica, amor por la exactitud y capacidad para diseñar procesos ordenados.'
     };
 
-    const description = `${descriptions[primary]} Al combinarse con tu dimensión ${RIASEC_DIMENSIONS[secondary].shortName.toLowerCase()}, eres ideal para campos que requieran ${RIASEC_DIMENSIONS[primary].skills[0].toLowerCase()} y ${RIASEC_DIMENSIONS[secondary].skills[0].toLowerCase()}.`;
+    const primaryDesc = descriptions[primary] || 'Posees un conjunto de destrezas balanceadas.';
+    const secShort = RIASEC_DIMENSIONS[secondary]?.shortName.toLowerCase() || 'complementaria';
+    const primSkill = RIASEC_DIMENSIONS[primary]?.skills[0]?.toLowerCase() || 'análisis';
+    const secSkill = RIASEC_DIMENSIONS[secondary]?.skills[0]?.toLowerCase() || 'creatividad';
+
+    const description = `${primaryDesc} Al combinarse con tu dimensión ${secShort}, eres ideal para campos que requieran ${primSkill} y ${secSkill}.`;
 
     return { title, description };
   }
