@@ -76,6 +76,29 @@ export class StorageController {
   private static authListeners: ((user: User | null) => void)[] = [];
 
   /**
+   * Helpers for demo user state persistence in localStorage
+   */
+  static getOrCreateDemoUser(): User {
+    try {
+      const stored = localStorage.getItem('vocaccion_demo_user');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {
+      console.warn('Error reading demo user from localStorage:', e);
+    }
+    return { ...INITIAL_DEMO_USER };
+  }
+
+  static saveDemoUser(user: User): void {
+    try {
+      localStorage.setItem('vocaccion_demo_user', JSON.stringify(user));
+    } catch (e) {
+      console.warn('Error saving demo user to localStorage:', e);
+    }
+  }
+
+  /**
    * Listen to Firebase Auth state changes and sync user profile + favorites + test history from Firestore
    */
   static initAuthListener(callback: (user: User | null) => void): () => void {
@@ -131,6 +154,18 @@ export class StorageController {
           return;
         } catch (err) {
           console.error('Error fetching user profile from Firestore:', err);
+        }
+      } else {
+        // If not logged in via Firebase Auth, check if demo account is active
+        try {
+          const isDemoActive = localStorage.getItem('vocaccion_demo_active') === 'true';
+          if (isDemoActive) {
+            this.localFallbackUser = this.getOrCreateDemoUser();
+            callback(this.localFallbackUser);
+            return;
+          }
+        } catch (e) {
+          // ignore
         }
       }
 
@@ -386,6 +421,18 @@ export class StorageController {
    */
   static async loginUser(email: string, password: string): Promise<{ user: User | null; error?: string }> {
     try {
+      const cleanEmail = email.trim().toLowerCase();
+
+      // Support built-in Demo Account without requiring Google or registration
+      if (
+        cleanEmail === 'demo@vocaccion.edu' || 
+        cleanEmail === 'demo@estudiante.edu' || 
+        cleanEmail === 'demo'
+      ) {
+        const demoUser = this.setDemoUser();
+        return { user: demoUser };
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const uid = userCredential.user.uid;
       let fullUser = await this.getUserProfile(uid);
@@ -440,7 +487,12 @@ export class StorageController {
    * Sign in with Demo User
    */
   static setDemoUser(): User {
-    this.localFallbackUser = { ...INITIAL_DEMO_USER };
+    try {
+      localStorage.setItem('vocaccion_demo_active', 'true');
+    } catch (e) {
+      // ignore
+    }
+    this.localFallbackUser = this.getOrCreateDemoUser();
     return this.localFallbackUser;
   }
 
@@ -448,6 +500,11 @@ export class StorageController {
    * Log out from Firebase Auth
    */
   static async logout(): Promise<void> {
+    try {
+      localStorage.removeItem('vocaccion_demo_active');
+    } catch (e) {
+      // ignore
+    }
     try {
       await signOut(auth);
     } catch (e) {
@@ -479,8 +536,9 @@ export class StorageController {
   static async updateUser(userId: string, data: Partial<User>): Promise<User | null> {
     try {
       if (userId === DEMO_USER_ID) {
-        if (!this.localFallbackUser) this.localFallbackUser = { ...INITIAL_DEMO_USER };
+        if (!this.localFallbackUser) this.localFallbackUser = this.getOrCreateDemoUser();
         this.localFallbackUser = { ...this.localFallbackUser, ...data };
+        this.saveDemoUser(this.localFallbackUser);
         return this.localFallbackUser;
       }
 
@@ -511,7 +569,7 @@ export class StorageController {
       const newlyAnswered = testResult.questionIdsAnswered || [];
 
       if (userId === DEMO_USER_ID) {
-        if (!this.localFallbackUser) this.localFallbackUser = { ...INITIAL_DEMO_USER };
+        if (!this.localFallbackUser) this.localFallbackUser = this.getOrCreateDemoUser();
         const updatedHistory = [testResult, ...(this.localFallbackUser.testHistory || [])];
         const prevAnswered = this.localFallbackUser.answeredQuestionIds || [];
         const mergedAnswered = Array.from(new Set([...prevAnswered, ...newlyAnswered]));
@@ -521,6 +579,7 @@ export class StorageController {
           testHistory: updatedHistory,
           answeredQuestionIds: mergedAnswered
         };
+        this.saveDemoUser(this.localFallbackUser);
         return this.localFallbackUser;
       }
 
@@ -567,7 +626,7 @@ export class StorageController {
   ): Promise<User | null> {
     try {
       if (userId === DEMO_USER_ID) {
-        if (!this.localFallbackUser) this.localFallbackUser = { ...INITIAL_DEMO_USER };
+        if (!this.localFallbackUser) this.localFallbackUser = this.getOrCreateDemoUser();
         let listKey: 'savedCareers' | 'savedUniversities' | 'savedScholarships' = 'savedCareers';
         if (type === 'university') listKey = 'savedUniversities';
         if (type === 'scholarship') listKey = 'savedScholarships';
@@ -581,6 +640,7 @@ export class StorageController {
           ...this.localFallbackUser,
           [listKey]: updatedList
         };
+        this.saveDemoUser(this.localFallbackUser);
         return this.localFallbackUser;
       }
 
@@ -618,11 +678,12 @@ export class StorageController {
   static async deleteTestResult(userId: string, testId: string): Promise<User | null> {
     try {
       if (userId === DEMO_USER_ID) {
-        if (!this.localFallbackUser) this.localFallbackUser = { ...INITIAL_DEMO_USER };
+        if (!this.localFallbackUser) this.localFallbackUser = this.getOrCreateDemoUser();
         this.localFallbackUser = {
           ...this.localFallbackUser,
           testHistory: (this.localFallbackUser.testHistory || []).filter(t => t.id !== testId)
         };
+        this.saveDemoUser(this.localFallbackUser);
         return this.localFallbackUser;
       }
 

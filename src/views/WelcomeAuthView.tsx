@@ -181,7 +181,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
   // Optional Demo access for quick preview testing
   const handleDemoAccess = () => {
     const demoUser = StorageController.setDemoUser();
-    onShowToast(`Modo Demostración Activado`, `Explorando VocAcción con el perfil de ${demoUser.name}.`, 'info');
+    onShowToast(`¡Bienvenido a la Cuenta Demo!`, `Has ingresado con éxito como ${demoUser.name} sin requerir Google ni registro.`, 'success');
     onAuthSuccess(demoUser);
   };
 
@@ -300,8 +300,65 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                   </span>
                 </button>
 
+                {/* FAST DEMO ACCESS CARD (No Google or Registration needed) */}
+                <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-purple-50/90 via-pink-50/50 to-amber-50/70 border border-purple-200/80 shadow-xs text-left">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-purple-600 text-white shadow-xs">
+                        <Sparkles className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 font-['Outfit',sans-serif]">
+                        ¿Acceder sin Google ni Registrarte?
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 shrink-0">
+                      Cuenta Demo
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-600 mb-2.5 leading-relaxed">
+                    Hemos habilitado una <strong>Cuenta de Prueba</strong> con perfil de estudiante, resultados del test RIASEC y carreras guardadas lista para explorar.
+                  </p>
+
+                  <div className="bg-white/90 rounded-xl px-2.5 py-2 border border-purple-100 text-[11px] text-slate-600 mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div>
+                        <span className="text-slate-400">Usuario: </span>
+                        <code className="text-purple-700 font-mono font-bold">demo@vocaccion.edu</code>
+                      </div>
+                      <div className="text-slate-300">|</div>
+                      <div>
+                        <span className="text-slate-400">Clave: </span>
+                        <code className="text-purple-700 font-mono font-bold">demo123</code>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail('demo@vocaccion.edu');
+                        setPassword('demo123');
+                        setMode('login');
+                      }}
+                      className="text-purple-600 hover:text-purple-800 text-[11px] font-bold hover:underline"
+                    >
+                      Autocompletar campos
+                    </button>
+                  </div>
+
+                  <button
+                    id="btn-fast-demo-login"
+                    type="button"
+                    onClick={handleDemoAccess}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all flex items-center justify-center gap-2 active:scale-[0.99] font-['Outfit',sans-serif] tracking-wide"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Ingresar con Cuenta Demo (1 Clic)</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 {/* Divider */}
-                <div className="relative my-5">
+                <div className="relative my-4">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-slate-200"></div>
                   </div>
@@ -318,9 +375,21 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
             {mode === 'login' && (
               <form onSubmit={handleEmailLogin} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 font-['Outfit',sans-serif]">
-                    Correo Electrónico
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 font-['Outfit',sans-serif]">
+                      Correo Electrónico
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmail('demo@vocaccion.edu');
+                        setPassword('demo123');
+                      }}
+                      className="text-[11px] font-semibold text-purple-600 hover:text-purple-800 hover:underline transition-colors"
+                    >
+                      Usar datos demo
+                    </button>
+                  </div>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                     <input
