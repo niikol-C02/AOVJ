@@ -4,7 +4,9 @@ import { Career } from '../types';
  * Catálogo amplio de carreras universitarias y programas profesionales.
  * Incluye perfil del aspirante, campo laboral, asignaturas clave, duración oficial y perfiles RIASEC.
  */
-export const COMPREHENSIVE_CAREERS_DATA: Career[] = [
+import { OFFICIAL_COLOMBIAN_PROGRAMS } from './careersCatalog';
+
+export const ORIGINAL_CORE_CAREERS: Career[] = [
   // --- INGENIERÍAS Y TECNOLOGÍA ---
   {
     id: 'ing-software-ia',
@@ -954,4 +956,14 @@ export const COMPREHENSIVE_CAREERS_DATA: Career[] = [
     suggestedUniversities: ['uni-unal', 'uni-uis', 'uni-caldas', 'uni-eafit'],
     iconName: 'Mountain'
   }
+];
+
+
+/**
+ * Catálogo Unificado Completo:
+ * Combina las 31 carreras fundacionales detalladas con más de 1.000 programas académicos oficiales SNIES de Colombia.
+ */
+export const COMPREHENSIVE_CAREERS_DATA: Career[] = [
+  ...ORIGINAL_CORE_CAREERS,
+  ...OFFICIAL_COLOMBIAN_PROGRAMS
 ];

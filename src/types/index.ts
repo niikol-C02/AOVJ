@@ -93,7 +93,11 @@ export interface Career {
   area: string;
   categoryColor: string;
   duration: string; // e.g. "5 años (10 semestres)"
-  degreeType: 'Licenciatura' | 'Ingeniería' | 'Tecnología' | 'Medicina' | 'Especialidad';
+  degreeType: 'Licenciatura' | 'Ingeniería' | 'Tecnología' | 'Medicina' | 'Especialidad' | 'Profesional Universitario' | 'Técnico Profesional' | 'Técnico' | 'Ciencias' | 'Administración' | 'Artes y Humanidades';
+  level?: 'Profesional Universitario' | 'Tecnológico' | 'Técnico Profesional' | 'Especialización' | 'Maestría';
+  modality?: 'Presencial' | 'Virtual' | 'A distancia' | 'Dual / Híbrida';
+  sniesCode?: string;
+  department?: string;
   riasecPrimary: RiasecType;
   riasecSecondary: RiasecType;
   shortDescription: string;
@@ -115,6 +119,7 @@ export interface University {
   shortName: string;
   type: 'Pública' | 'Privada';
   city: string;
+  department?: string;
   country: string;
   logoText: string;
   badgeBg: string;
@@ -125,6 +130,8 @@ export interface University {
   campusHighlights: string[];
   websiteUrl: string;
   rating: number;
+  sniesCode?: string;
+  accreditation?: string;
 }
 
 export interface Scholarship {
@@ -132,6 +139,8 @@ export interface Scholarship {
   title: string;
   organization: string;
   coverage: '100% Total' | 'Parcial 50-80%' | 'Manutención y Gastos' | 'Internacional';
+  status?: 'Vigente' | 'Próxima convocatoria' | 'Cerrada';
+  category?: 'Pública' | 'Privada' | 'Excelencia' | 'Deportiva / Cultural' | 'Vulnerable / Bajos Recursos' | 'Regional' | 'Internacional' | 'Crédito Condonable';
   badgeBg: string;
   description: string;
   requirements: string[];
