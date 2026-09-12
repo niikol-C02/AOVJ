@@ -3,6 +3,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { hashPassword, verifyPassword, generateSessionToken } from './auth';
+import { validateEmail, isPasswordValid, getMissingPasswordRequirements } from '../src/utils/authValidation';
 
 export interface UserResponse {
   id: string;
@@ -230,7 +231,16 @@ export function registerDbUser(data: {
   const db = getDb();
   const cleanEmail = data.email.trim().toLowerCase();
 
-  // 1. Check if email already exists
+  // 1. Validate email format
+  const emailCheck = validateEmail(cleanEmail);
+  if (!emailCheck.isValid) {
+    return {
+      user: null,
+      error: emailCheck.error || 'Correo electrónico inválido.'
+    };
+  }
+
+  // 2. Check if email already exists
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(cleanEmail);
   if (existing) {
     return {
@@ -239,11 +249,12 @@ export function registerDbUser(data: {
     };
   }
 
-  // 2. Validate password length
-  if (!data.password || data.password.length < 6) {
+  // 3. Validate strict password requirements
+  if (!isPasswordValid(data.password)) {
+    const missing = getMissingPasswordRequirements(data.password || '');
     return {
       user: null,
-      error: 'La contraseña debe contener al menos 6 caracteres.'
+      error: `La contraseña no cumple los requisitos de seguridad: ${missing.join(', ')}.`
     };
   }
 

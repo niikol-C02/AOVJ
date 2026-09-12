@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { StorageController } from '../controllers/StorageController';
 import { User, AuthMode } from '../types';
+import { PasswordRequirementsIndicator } from '../components/PasswordRequirementsIndicator';
+import { validateEmail, isPasswordValid, getMissingPasswordRequirements } from '../utils/authValidation';
 import { 
   Compass, 
   Sparkles, 
@@ -34,6 +36,8 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
   const [educationLevel, setEducationLevel] = useState('Último año de Bachillerato / Secundaria');
   const [city, setCity] = useState('');
@@ -111,12 +115,21 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
       setErrorMsg('Por favor ingresa tu nombre completo.');
       return;
     }
-    if (!email.trim()) {
-      setErrorMsg('Por favor ingresa tu correo electrónico.');
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      setErrorMsg(emailCheck.error || 'Por favor ingresa un correo electrónico válido.');
       return;
     }
-    if (password.length < 6) {
-      setErrorMsg('La contraseña debe contener al menos 6 caracteres.');
+
+    if (!isPasswordValid(password)) {
+      const missing = getMissingPasswordRequirements(password);
+      setErrorMsg(`Requisitos faltantes en la contraseña: ${missing.join(', ')}.`);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMsg('Las contraseñas no coinciden. Por favor confirma tu contraseña exactamente igual.');
       return;
     }
 
@@ -142,7 +155,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
         setErrorMsg(result.error || 'No pudimos registrar tu cuenta.');
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Error al crear la cuenta en Firebase.');
+      setErrorMsg(err?.message || 'Error al crear la cuenta.');
     } finally {
       setIsLoading(false);
     }
@@ -527,7 +540,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 font-['Outfit',sans-serif]">
-                    Contraseña * (mínimo 6 caracteres)
+                    Contraseña *
                   </label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -537,7 +550,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                       required
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="••••••••"
+                      placeholder="Crea una contraseña segura"
                       className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500 transition-all shadow-xs"
                     />
                     <button
@@ -550,6 +563,40 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                     </button>
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 font-['Outfit',sans-serif]">
+                    Confirmar Contraseña *
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="register-confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Repite exactamente tu contraseña"
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/40 focus:border-pink-500 transition-all shadow-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Real-time Visual Password Checklist */}
+                {(password.length > 0 || confirmPassword.length > 0) && (
+                  <PasswordRequirementsIndicator
+                    password={password}
+                    confirmPassword={confirmPassword}
+                  />
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -591,11 +638,74 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                   </div>
                 </div>
 
+                {/* Notice of missing requirement if user has interacted with the form */}
+                {(name.length > 0 || email.length > 0 || password.length > 0) && (
+                  (() => {
+                    const emailValid = validateEmail(email).isValid;
+                    const pwValid = isPasswordValid(password);
+                    const match = password.length > 0 && password === confirmPassword;
+
+                    if (!name.trim()) {
+                      return (
+                        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                          <span>Por favor ingresa tu nombre completo para continuar.</span>
+                        </div>
+                      );
+                    }
+                    if (!emailValid) {
+                      return (
+                        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                          <span>Por favor ingresa un correo electrónico válido (ej. estudiante@colegio.edu).</span>
+                        </div>
+                      );
+                    }
+                    if (!pwValid) {
+                      const missing = getMissingPasswordRequirements(password);
+                      return (
+                        <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div>
+                            <span className="font-semibold block">Requisitos faltantes en la contraseña:</span>
+                            <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-[11px]">
+                              {missing.map((m, idx) => (
+                                <li key={idx}>{m}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      );
+                    }
+                    if (!match) {
+                      return (
+                        <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                          <span>Las contraseñas no coinciden. Por favor asegúrate de escribirlas idénticas.</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <span>¡Todos los requisitos de registro están listos y completos!</span>
+                      </div>
+                    );
+                  })()
+                )}
+
                 <button
                   id="btn-submit-register"
                   type="submit"
-                  disabled={isLoading || isGoogleLoading}
-                  className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:via-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-70 font-['Outfit',sans-serif] tracking-wide"
+                  disabled={
+                    isLoading || 
+                    isGoogleLoading || 
+                    !name.trim() || 
+                    !validateEmail(email).isValid || 
+                    !isPasswordValid(password) || 
+                    password !== confirmPassword
+                  }
+                  className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:via-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none font-['Outfit',sans-serif] tracking-wide"
                 >
                   {isLoading ? (
                     <RefreshCw className="w-4 h-4 animate-spin" />

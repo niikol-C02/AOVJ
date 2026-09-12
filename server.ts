@@ -14,6 +14,11 @@ import {
   deleteDbTestResult,
   buildUserResponse
 } from './server/db';
+import {
+  validateEmail,
+  isPasswordValid,
+  getMissingPasswordRequirements
+} from './src/utils/authValidation';
 
 const app = express();
 const PORT = 3000;
@@ -50,11 +55,15 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ error: 'El nombre es obligatorio.' });
     }
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return res.status(400).json({ error: 'Ingresa un correo electrónico válido.' });
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ error: emailCheck.error });
     }
-    if (!password || typeof password !== 'string' || password.length < 6) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres.' });
+    if (!password || typeof password !== 'string' || !isPasswordValid(password)) {
+      const missing = getMissingPasswordRequirements(password || '');
+      return res.status(400).json({
+        error: `La contraseña no cumple los requisitos obligatorios de seguridad: ${missing.join(', ')}.`
+      });
     }
 
     const result = registerDbUser({

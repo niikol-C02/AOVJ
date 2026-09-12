@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { AuthMode, User } from '../types';
 import { StorageController } from '../controllers/StorageController';
-import { X, Mail, Lock, User as UserIcon, Sparkles, KeyRound, MapPin, GraduationCap, CheckCircle2, ArrowRight, RefreshCw } from 'lucide-react';
+import { PasswordRequirementsIndicator } from './PasswordRequirementsIndicator';
+import { validateEmail, isPasswordValid, getMissingPasswordRequirements } from '../utils/authValidation';
+import { X, Mail, Lock, Eye, EyeOff, User as UserIcon, Sparkles, KeyRound, MapPin, GraduationCap, CheckCircle2, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,10 +25,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
   const [age, setAge] = useState<number | ''>(17);
   const [educationLevel, setEducationLevel] = useState('Último año de Bachillerato / Secundaria');
-  const [city, setCity] = useState('Ciudad de México / Bogotá');
+  const [city, setCity] = useState('Bogotá');
   const [country, setCountry] = useState('Colombia');
 
   // Recovery & error states
@@ -84,13 +89,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
-    if (!name.trim() || !email.trim() || !password) {
-      setErrorMsg('Por favor completa todos los campos obligatorios.');
+    if (!name.trim()) {
+      setErrorMsg('Por favor ingresa tu nombre completo.');
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMsg('La contraseña debe tener al menos 6 caracteres.');
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      setErrorMsg(emailCheck.error || 'Por favor ingresa un correo electrónico con formato válido.');
+      return;
+    }
+
+    if (!isPasswordValid(password)) {
+      const missing = getMissingPasswordRequirements(password);
+      setErrorMsg(`Requisitos faltantes en la contraseña: ${missing.join(', ')}.`);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMsg('Las contraseñas no coinciden. Por favor asegúrate de que sean idénticas.');
       return;
     }
 
@@ -118,7 +135,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setErrorMsg(result.error || 'Error al registrar tu cuenta.');
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Error al registrar la cuenta en Firebase.');
+      setErrorMsg(err?.message || 'Error al registrar la cuenta.');
     } finally {
       setIsLoading(false);
     }
@@ -423,26 +440,128 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Contraseña (Mín. 6 caracteres)</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Contraseña *</label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     id="register-password-input"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
+                    placeholder="Crea una contraseña segura"
+                    className="w-full pl-10 pr-10 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Confirmar Contraseña *</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    id="register-confirm-password-input"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder="Repite tu contraseña"
+                    className="w-full pl-10 pr-10 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Real-time Visual Password Checklist */}
+              {(password.length > 0 || confirmPassword.length > 0) && (
+                <PasswordRequirementsIndicator
+                  password={password}
+                  confirmPassword={confirmPassword}
+                />
+              )}
+
+              {/* Validation helper status banner */}
+              {(name.length > 0 || email.length > 0 || password.length > 0) && (
+                (() => {
+                  const emailValid = validateEmail(email).isValid;
+                  const pwValid = isPasswordValid(password);
+                  const match = password.length > 0 && password === confirmPassword;
+
+                  if (!name.trim()) {
+                    return (
+                      <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                        <span>Por favor ingresa tu nombre completo para continuar.</span>
+                      </div>
+                    );
+                  }
+                  if (!emailValid) {
+                    return (
+                      <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                        <span>Ingresa un correo con formato válido (ej. estudiante@colegio.edu).</span>
+                      </div>
+                    );
+                  }
+                  if (!pwValid) {
+                    const missing = getMissingPasswordRequirements(password);
+                    return (
+                      <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                        <div>
+                          <span className="font-semibold block">Requisitos faltantes en la contraseña:</span>
+                          <ul className="list-disc list-inside mt-0.5 space-y-0.5 text-[11px]">
+                            {missing.map((m, idx) => (
+                              <li key={idx}>{m}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (!match) {
+                    return (
+                      <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                        <span>Las contraseñas no coinciden. Por favor verifícalas.</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                      <span>¡Todos los requisitos de registro están cumplidos!</span>
+                    </div>
+                  );
+                })()
+              )}
 
               <button
                 id="submit-register-btn"
                 type="submit"
-                disabled={isLoading}
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-md hover:shadow-lg hover:opacity-95 backdrop-blur-sm border border-white/30 transition-all flex items-center justify-center gap-2"
+                disabled={
+                  isLoading || 
+                  !name.trim() || 
+                  !validateEmail(email).isValid || 
+                  !isPasswordValid(password) || 
+                  password !== confirmPassword
+                }
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-md hover:shadow-lg hover:opacity-95 backdrop-blur-sm border border-white/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
