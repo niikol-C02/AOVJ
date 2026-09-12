@@ -104,8 +104,22 @@ export class StorageController {
   static initAuthListener(callback: (user: User | null) => void): () => void {
     this.authListeners.push(callback);
 
+    // Clean up any stale legacy demo flag so initial page entry always shows the login screen
+    try {
+      localStorage.removeItem('vocaccion_demo_active');
+    } catch (e) {
+      // ignore
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (fbUser: FirebaseUser | null) => {
-      if (fbUser) {
+      let hasActiveSession = false;
+      try {
+        hasActiveSession = sessionStorage.getItem('vocaccion_session_authenticated') === 'true';
+      } catch (e) {
+        // ignore
+      }
+
+      if (fbUser && hasActiveSession) {
         try {
           let user = await this.getUserProfile(fbUser.uid);
           if (!user) {
@@ -155,21 +169,22 @@ export class StorageController {
         } catch (err) {
           console.error('Error fetching user profile from Firestore:', err);
         }
-      } else {
-        // If not logged in via Firebase Auth, check if demo account is active
+      } else if (fbUser && !hasActiveSession) {
+        // If there was a lingering Firebase token from another visit, sign out so the user starts cleanly at the login screen
         try {
-          const isDemoActive = localStorage.getItem('vocaccion_demo_active') === 'true';
-          if (isDemoActive) {
-            this.localFallbackUser = this.getOrCreateDemoUser();
-            callback(this.localFallbackUser);
-            return;
-          }
+          await signOut(auth);
         } catch (e) {
           // ignore
         }
       }
 
-      // If no auth user or logged out, pass null (requires login)
+      // If active session was set for demo user
+      if (hasActiveSession && this.localFallbackUser) {
+        callback(this.localFallbackUser);
+        return;
+      }
+
+      // When opening or re-entering the page, always require explicit login (shows Welcome / Login screen)
       this.localFallbackUser = null;
       callback(null);
     });
@@ -324,6 +339,12 @@ export class StorageController {
         testHistory: []
       };
 
+      try {
+        sessionStorage.setItem('vocaccion_session_authenticated', 'true');
+      } catch (e) {
+        // ignore
+      }
+
       this.localFallbackUser = fullUser;
       return { user: fullUser };
     } catch (err: any) {
@@ -394,6 +415,12 @@ export class StorageController {
           testHistory: [],
           answeredQuestionIds: []
         };
+      }
+
+      try {
+        sessionStorage.setItem('vocaccion_session_authenticated', 'true');
+      } catch (e) {
+        // ignore
       }
 
       this.localFallbackUser = fullUser;
@@ -467,6 +494,12 @@ export class StorageController {
         };
       }
 
+      try {
+        sessionStorage.setItem('vocaccion_session_authenticated', 'true');
+      } catch (e) {
+        // ignore
+      }
+
       this.localFallbackUser = fullUser;
       return { user: fullUser };
     } catch (err: any) {
@@ -488,7 +521,7 @@ export class StorageController {
    */
   static setDemoUser(): User {
     try {
-      localStorage.setItem('vocaccion_demo_active', 'true');
+      sessionStorage.setItem('vocaccion_session_authenticated', 'true');
     } catch (e) {
       // ignore
     }
@@ -502,6 +535,11 @@ export class StorageController {
   static async logout(): Promise<void> {
     try {
       localStorage.removeItem('vocaccion_demo_active');
+    } catch (e) {
+      // ignore
+    }
+    try {
+      sessionStorage.removeItem('vocaccion_session_authenticated');
     } catch (e) {
       // ignore
     }

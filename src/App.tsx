@@ -90,11 +90,21 @@ export default function App() {
   };
 
   const handleAuthSuccess = (user: User) => {
+    try {
+      sessionStorage.setItem('vocaccion_session_authenticated', 'true');
+    } catch (e) {
+      // ignore
+    }
     setCurrentUser(user);
     setIsAuthOpen(false);
   };
 
   const handleLogout = async () => {
+    try {
+      sessionStorage.removeItem('vocaccion_session_authenticated');
+    } catch (e) {
+      // ignore
+    }
     await StorageController.logout();
     setCurrentUser(null);
     showToast('Sesión cerrada', 'Has salido de tu cuenta de VocAcción.', 'info');
