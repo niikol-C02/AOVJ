@@ -1,6 +1,7 @@
 import React from 'react';
 import { Career, TestResult, ViewType } from '../types';
 import { RIASEC_DIMENSIONS } from '../models/data';
+import { getOfficialSemesters } from '../utils/careerOfferings';
 import { 
   X, 
   Layers, 
@@ -166,11 +167,28 @@ export const CareerCompareModal: React.FC<CareerCompareModalProps> = ({
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
                             <Clock className="w-3 h-3 text-purple-500" />
-                            Duración & Grado
+                            Duración & Semestres
                           </p>
-                          <p className="font-bold text-slate-900">{career.duration}</p>
-                          <p className="text-slate-600 text-[11px]">{career.degreeType}</p>
+                          {(() => {
+                            const sem = getOfficialSemesters(career.name, career.degreeType, career.level);
+                            return (
+                              <p className="font-bold text-slate-900">
+                                📚 {sem.semesters} semestres ({sem.duration})
+                              </p>
+                            );
+                          })()}
+                          <p className="text-slate-600 text-[11px]">{career.level || career.degreeType}</p>
                         </div>
+
+                        {career.semesterTuition && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                              <DollarSign className="w-3 h-3 text-purple-500" />
+                              Costo Matrícula Semestral
+                            </p>
+                            <p className="font-semibold text-slate-900 text-xs">{career.semesterTuition}</p>
+                          </div>
+                        )}
 
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">

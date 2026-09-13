@@ -78,9 +78,9 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
   const matchedCareerObjects = testResult.recommendedCareers
     .map(rc => {
       const career = CAREERS_DATA.find(c => c.id === rc.careerId);
-      return career ? { ...career, matchPercentage: rc.matchPercentage } : null;
+      return career ? { ...career, matchPercentage: rc.matchPercentage, explanation: rc.explanation } : null;
     })
-    .filter(Boolean) as (Career & { matchPercentage: number })[];
+    .filter(Boolean) as (Career & { matchPercentage: number; explanation?: string })[];
 
   const handlePrintCertificate = () => {
     window.print();
@@ -131,7 +131,7 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
               className="px-4 py-2.5 rounded-xl bg-purple-700/60 hover:bg-purple-700/80 text-white text-xs font-semibold backdrop-blur-md border border-purple-400/40 flex items-center gap-2 transition-colors shadow-xs"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Rehacer Test</span>
+              <span>Hacer Otro Test (Nuevas Preguntas)</span>
             </button>
           </div>
         </div>
@@ -274,12 +274,31 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                       <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
                         {career.shortDescription}
                       </p>
+
+                      {career.explanation && (
+                        <div className="p-2.5 rounded-2xl bg-purple-50/80 border border-purple-200/60 text-[11px] text-purple-950 leading-relaxed flex items-start gap-2 shadow-2xs">
+                          <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-purple-800">¿Por qué es para ti? </span>
+                            <span>{career.explanation}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-3 pt-2 border-t border-slate-200/50">
-                      <div className="flex items-center justify-between text-xs text-slate-500">
-                        <span>{career.duration.split(' ')[0]} {career.duration.split(' ')[1]}</span>
-                        <span className="text-emerald-600 font-bold">{career.employabilityRate} empleo</span>
+                      <div className="space-y-1 text-xs text-slate-600">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-purple-900">
+                            {career.semestersCount ? `${career.semestersCount} semestres` : career.duration}
+                          </span>
+                          <span className="text-emerald-600 font-bold">{career.employabilityRate} empleo</span>
+                        </div>
+                        {career.semesterTuition && (
+                          <p className="text-[10px] text-slate-500 truncate" title={career.semesterTuition}>
+                            💰 {career.semesterTuition.split('(')[0]}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center justify-between gap-2">
@@ -355,6 +374,16 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                     <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
                       {career.shortDescription}
                     </p>
+
+                    {career.explanation && (
+                      <div className="p-2.5 rounded-2xl bg-purple-50/80 border border-purple-200/60 text-[11px] text-purple-950 leading-relaxed flex items-start gap-2 shadow-2xs">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-purple-800">¿Por qué es para ti? </span>
+                          <span>{career.explanation}</span>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex flex-wrap gap-1 pt-1">
                       {career.necessarySkills.slice(0, 3).map((sk, idx) => (

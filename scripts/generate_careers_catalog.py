@@ -649,12 +649,47 @@ for dom in DOMAINS:
         # Pick 3 to 5 realistic universities
         selected_unis = random.sample(uni_ids, min(4, len(uni_ids)))
         
+        # Extract semesters
+        semesters_count = 10
+        if "12 semestres" in duration or "14 semestres" in duration:
+            semesters_count = 12
+        elif "10 semestres" in duration:
+            semesters_count = 10
+        elif "8 semestres" in duration:
+            semesters_count = 8
+        elif "6 semestres" in duration:
+            semesters_count = 6
+        elif "5 semestres" in duration:
+            semesters_count = 5
+        elif "4 semestres" in duration:
+            semesters_count = 4
+        elif "2 semestres" in duration:
+            semesters_count = 2
+
+        # Tuition estimation
+        if "Medicina" in name or "Cirugía" in name:
+            tuition_est = "$8,500,000 - $18,000,000 COP / semestre (Consultar según IES pública o privada)"
+        elif level == "Tecnológico" or level == "Técnico Profesional":
+            tuition_est = "$1,500,000 - $3,200,000 COP / semestre (Gratuito en IES públicas con Política de Gratuidad / SENA)"
+        elif level == "Especialización":
+            tuition_est = "$4,800,000 - $9,500,000 COP / semestre (Consultar con la institución)"
+        elif level == "Maestría":
+            tuition_est = "$6,500,000 - $13,000,000 COP / semestre (Consultar con la institución)"
+        elif "Ingeniería" in degType:
+            tuition_est = "$3,800,000 - $7,900,000 COP / semestre (Aplica Política de Gratuidad en IES oficiales)"
+        elif "Licenciatura" in degType or "Educación" in dom["area"]:
+            tuition_est = "$2,400,000 - $4,800,000 COP / semestre (Aplica Política de Gratuidad en IES oficiales)"
+        else:
+            tuition_est = "$3,200,000 - $6,800,000 COP / semestre (Consultar con la universidad)"
+
         all_programs.append({
             "id": pid,
             "name": name,
             "area": dom["area"],
             "categoryColor": dom["categoryColor"],
             "duration": duration,
+            "semestersCount": semesters_count,
+            "semesterTuition": tuition_est,
             "degreeType": degType,
             "level": level,
             "modality": modality,
@@ -691,6 +726,14 @@ print(f"Base domain programs generated: {len(all_programs)}")
 # SNIES branches:
 # Specialties, regional variants, specific engineering branches, vocational technologies SENA, and postgrad levels
 BRANCH_TEMPLATES = [
+    # CIENCIAS FORENSES, CRIMINOLOGÍA Y JUSTICIA
+    ("Criminalística y Ciencias Forenses", "Ciencias Forenses y Seguridad", "slate", "Profesional Universitario", "Profesional Universitario", "4 a 5 años (8-10 semestres)", "Presencial", "I", "R", "Fingerprint"),
+    ("Criminología y Política Criminal", "Ciencias Sociales y Jurídicas", "purple", "Profesional Universitario", "Profesional Universitario", "4 a 5 años (8-10 semestres)", "Presencial", "I", "S", "Scale"),
+    ("Investigación Judicial y Criminalística", "Ciencias Forenses y Seguridad", "slate", "Profesional Universitario", "Profesional Universitario", "4 a 5 años (8-10 semestres)", "Presencial", "I", "C", "ShieldCheck"),
+    ("Tecnología en Criminalística y Lofoscopia Forense", "Ciencias Forenses y Seguridad", "blue", "Tecnología", "Tecnológico", "3 años (6 semestres)", "Presencial", "I", "R", "Search"),
+    ("Especialización en Balística Forense e Investigación del Delito", "Ciencias Forenses y Seguridad", "slate", "Especialidad", "Especialización", "1 año (2 semestres)", "Presencial", "R", "I", "Crosshair"),
+    ("Especialización en Psicología Jurídica y Forense", "Ciencias de la Salud", "emerald", "Especialidad", "Especialización", "1 a 2 años (2-4 semestres)", "Dual / Híbrida", "I", "S", "Brain"),
+
     # INGENIERÍAS ESPECIALIZADAS Y EMERGENTES
     ("Ingeniería en Inteligencia Artificial y Robótica", "Ingeniería y Tecnología", "indigo", "Ingeniería", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "I", "R", "Cpu"),
     ("Ingeniería de Ciberseguridad y Redes Defensivas", "Ingeniería y Tecnología", "indigo", "Ingeniería", "Profesional Universitario", "5 años (10 semestres)", "Virtual", "I", "C", "Shield"),
@@ -738,16 +781,16 @@ BRANCH_TEMPLATES = [
     ("Gestión Aduanera y Operaciones Portuarias", "Ciencias Económicas y Administrativas", "amber", "Administración", "Profesional Universitario", "4 años (8 semestres)", "Presencial", "C", "E", "Anchor"),
 
     # PEDAGOGÍA Y CIENCIAS DE LA EDUCACIÓN
-    ("Licenciatura en Lengua Castellana y Literatura", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "A", "S", "Book"),
-    ("Licenciatura en Física y Matemáticas", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "I", "S", "Calculator"),
-    ("Licenciatura en Química y Biología", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "I", "S", "FlaskConical"),
-    ("Licenciatura en Ciencias Sociales e Historia de Colombia", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "S", "A", "Landmark"),
-    ("Licenciatura en Educación para la Convivencia y la Paz", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "S", "E", "HandHeart"),
-    ("Licenciatura en Música y Expresión Sonora Escolar", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "A", "S", "Music"),
-    ("Licenciatura en Artes Visuales y Plásticas", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "A", "S", "Brush"),
-    ("Licenciatura en Filosofía y Ética Ciudadana", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "S", "I", "Compass"),
-    ("Licenciatura en Tecnología e Informática Educativa", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Virtual", "I", "S", "Laptop"),
-    ("Licenciatura en Educación Comunitaria y Derechos Humanos", "Educación y Pedagogía", "teal", "Licenciatura", "Licenciatura", "5 años (10 semestres)", "Presencial", "S", "E", "Globe"),
+    ("Licenciatura en Lengua Castellana y Literatura", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "A", "S", "Book"),
+    ("Licenciatura en Física y Matemáticas", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "I", "S", "Calculator"),
+    ("Licenciatura en Química y Biología", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "I", "S", "FlaskConical"),
+    ("Licenciatura en Ciencias Sociales e Historia de Colombia", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "S", "A", "Landmark"),
+    ("Licenciatura en Educación para la Convivencia y la Paz", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "S", "E", "HandHeart"),
+    ("Licenciatura en Música y Expresión Sonora Escolar", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "A", "S", "Music"),
+    ("Licenciatura en Artes Visuales y Plásticas", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "A", "S", "Brush"),
+    ("Licenciatura en Filosofía y Ética Ciudadana", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "S", "I", "Compass"),
+    ("Licenciatura en Tecnología e Informática Educativa", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Virtual", "I", "S", "Laptop"),
+    ("Licenciatura en Educación Comunitaria y Derechos Humanos", "Educación y Pedagogía", "teal", "Licenciatura", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "S", "E", "Globe"),
 
     # CIENCIAS NATURALES Y AGROPECUARIAS
     ("Biotecnología Vegetal y Cultivo de Tejidos", "Ciencias Exactas y Naturales", "blue", "Ciencias", "Profesional Universitario", "5 años (10 semestres)", "Presencial", "I", "R", "Leaf"),
@@ -996,7 +1039,7 @@ for domain_key, domain_label, items in SPECIALIZATION_DOMAINS:
         default_icon = "GraduationCap"
         deg_type = "Licenciatura"
         dur = "5 años (10 semestres)"
-        lvl = "Licenciatura"
+        lvl = "Profesional Universitario"
         base_sal = "$2,400,000 - $5,000,000 COP / mes"
     elif domain_key == "Artes":
         area = "Artes y Diseño"
@@ -1037,7 +1080,7 @@ for domain_key, domain_label, items in SPECIALIZATION_DOMAINS:
         # 4. Técnico Profesional / Maestría / Licenciatura
         v4_name = f"Licenciatura en {title}" if domain_key == "Educación" else (f"Técnico Profesional en {title}" if domain_key == "TecnicoSENA" else f"Maestría en {title}")
         v4_deg = "Licenciatura" if domain_key == "Educación" else ("Técnico Profesional" if domain_key == "TecnicoSENA" else "Especialidad")
-        v4_lvl = "Licenciatura" if domain_key == "Educación" else ("Técnico Profesional" if domain_key == "TecnicoSENA" else "Maestría")
+        v4_lvl = "Profesional Universitario" if domain_key == "Educación" else ("Técnico Profesional" if domain_key == "TecnicoSENA" else "Maestría")
         v4_dur = "5 años (10 semestres)" if domain_key == "Educación" else ("2 años (4 semestres)" if domain_key == "TecnicoSENA" else "2 años (4 semestres)")
         v4_mod = "Presencial" if domain_key == "Educación" else "Virtual"
         v4_sal = "$2,400,000 - $5,000,000 COP / mes" if domain_key == "Educación" else ("$1,700,000 - $3,200,000 COP / mes" if domain_key == "TecnicoSENA" else "$4,500,000 - $13,000,000 COP / mes")

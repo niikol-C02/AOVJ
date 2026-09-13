@@ -66,6 +66,7 @@ export interface Question {
   text: string;
   category: RiasecType;
   area: 'intereses' | 'habilidades' | 'personalidad' | 'preferencias';
+  topic?: string;
   options?: {
     label: string;
     value: number;
@@ -84,7 +85,23 @@ export interface TestResult {
   recommendedCareers: {
     careerId: string;
     matchPercentage: number;
+    explanation?: string;
   }[];
+}
+
+export interface CareerUniversityOffering {
+  universityId: string;
+  universityName: string;
+  universityShortName?: string;
+  type: 'Pública' | 'Privada';
+  semestersCount: number | string;
+  duration?: string;
+  semesterTuition: string; // e.g. "$32.800.000 COP / semestre", or "Gratuita (Política de Gratuidad "Puedo Estudiar" del Gobierno Nacional / PBM oficial)", or "Consultar valor con la universidad"
+  city: string;
+  modality: 'Presencial' | 'Virtual' | 'A distancia' | 'Dual / Híbrida' | string;
+  websiteUrl?: string;
+  accreditation?: string;
+  admissionNote?: string;
 }
 
 export interface Career {
@@ -93,6 +110,19 @@ export interface Career {
   area: string;
   categoryColor: string;
   duration: string; // e.g. "5 años (10 semestres)"
+  semestersCount?: number | string;
+  semesterTuition?: string;
+  citiesOffered?: string[];
+  universityTuitions?: {
+    universityId: string;
+    universityName?: string;
+    tuition: string;
+    city?: string;
+    semestersCount?: number | string;
+    duration?: string;
+    modality?: string;
+  }[];
+  universityOfferings?: CareerUniversityOffering[];
   degreeType: 'Licenciatura' | 'Ingeniería' | 'Tecnología' | 'Medicina' | 'Especialidad' | 'Profesional Universitario' | 'Técnico Profesional' | 'Técnico' | 'Ciencias' | 'Administración' | 'Artes y Humanidades';
   level?: 'Profesional Universitario' | 'Tecnológico' | 'Técnico Profesional' | 'Especialización' | 'Maestría';
   modality?: 'Presencial' | 'Virtual' | 'A distancia' | 'Dual / Híbrida';

@@ -71,7 +71,12 @@ export class TestEngine {
     const profileInfo = this.getProfileNarrative(primary, secondary);
 
     // 5. Match every career with a weighted algorithm + profile context
-    const recommendedCareers = this.calculateCareerMatches(scores, CAREERS_DATA, userContext);
+    const recommendedCareers = this.calculateCareerMatches(
+      scores,
+      CAREERS_DATA,
+      userContext,
+      { answers, questions }
+    );
 
     // 6. Assemble key strengths
     const topStrengths = this.extractStrengths(dominantTypes);
@@ -92,8 +97,29 @@ export class TestEngine {
   public static calculateCareerMatches(
     scores: Record<RiasecType, number>,
     careers: Career[],
-    userContext?: UserPersonalizationContext
-  ): { careerId: string; matchPercentage: number }[] {
+    userContext?: UserPersonalizationContext,
+    userAnswers?: { answers: Record<number, number>; questions: Question[] }
+  ): { careerId: string; matchPercentage: number; explanation?: string }[] {
+    // Detect specific topic affinities from the user's high ratings (>= 4)
+    const highInterestTopics = new Set<string>();
+    if (userAnswers) {
+      userAnswers.questions.forEach(q => {
+        const rating = userAnswers.answers[q.id] || 3;
+        if (rating >= 4 && q.topic) {
+          highInterestTopics.add(q.topic.toLowerCase());
+        }
+      });
+    }
+
+    const hasCrimeInvestigativeInterest = 
+      highInterestTopics.has('criminología y justicia') ||
+      highInterestTopics.has('criminalística') ||
+      highInterestTopics.has('criminalística y forense') ||
+      highInterestTopics.has('investigación') ||
+      highInterestTopics.has('documentología forense') ||
+      highInterestTopics.has('justicia social') ||
+      highInterestTopics.has('litigio y derecho');
+
     const matches = careers.map(career => {
       const primaryScore = scores[career.riasecPrimary] || 50;
       const secondaryScore = scores[career.riasecSecondary] || 50;
@@ -101,10 +127,24 @@ export class TestEngine {
       // Primary dimension has 60% weight, secondary has 30%, overall balance has 10%
       let baseMatch = (primaryScore * 0.6) + (secondaryScore * 0.3) + 10;
 
+      // Specific interest boost for Criminology, Criminalistics & Forensics
+      const careerIdLower = career.id.toLowerCase();
+      const careerNameLower = career.name.toLowerCase();
+      const isCriminologyOrCriminalistics = 
+        careerIdLower.includes('criminalistica') ||
+        careerIdLower.includes('criminologia') ||
+        careerNameLower.includes('criminalística') ||
+        careerNameLower.includes('criminología') ||
+        careerNameLower.includes('forense') ||
+        careerNameLower.includes('investigación judicial');
+
+      if (isCriminologyOrCriminalistics && hasCrimeInvestigativeInterest) {
+        baseMatch += 8; // strong boost when student specifically marked interest in forensics/justice
+      }
+
       // Contextual personalization: City & Region availability
       if (userContext?.city) {
         const userCityNorm = userContext.city.toLowerCase().trim();
-        // Check if any suggested university for this career is located in the user's city/region
         const hasLocalUni = career.suggestedUniversities.some(uniId => {
           const uni = UNIVERSITIES_DATA.find(u => u.id === uniId);
           return uni && (
@@ -114,17 +154,29 @@ export class TestEngine {
         });
 
         if (hasLocalUni) {
-          // Slight bonus for local availability and access
           baseMatch += 2;
         }
       }
 
-      // Bound between 45% and 99%
-      const clampedMatch = Math.min(99, Math.max(45, Math.round(baseMatch)));
+      // Bound between 48% and 99%
+      const clampedMatch = Math.min(99, Math.max(48, Math.round(baseMatch)));
+
+      // Generate brief, personalized explanation
+      let explanation = '';
+      if (careerIdLower.includes('criminalistica') || careerNameLower.includes('criminalística')) {
+        explanation = 'Tus respuestas reflejaron curiosidad analítica, rigor para examinar evidencias y gusto por la resolución científica de hechos.';
+      } else if (careerIdLower.includes('criminologia') || careerNameLower.includes('criminología')) {
+        explanation = 'Tus respuestas destacaron un marcado interés por comprender la conducta humana, las problemáticas sociales y la justicia.';
+      } else {
+        const pDim = RIASEC_DIMENSIONS[career.riasecPrimary];
+        const sDim = RIASEC_DIMENSIONS[career.riasecSecondary];
+        explanation = `Recomendada por tu destacada afinidad con el perfil ${pDim?.name || career.riasecPrimary} (${primaryScore}%) y ${sDim?.name || career.riasecSecondary} (${secondaryScore}%), fundamentales en esta profesión.`;
+      }
 
       return {
         careerId: career.id,
-        matchPercentage: clampedMatch
+        matchPercentage: clampedMatch,
+        explanation
       };
     });
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Career, University, ViewType } from '../types';
 import { RIASEC_DIMENSIONS, UNIVERSITIES_DATA } from '../models/data';
+import { getCareerUniversityOfferings, getOfficialSemesters } from '../utils/careerOfferings';
 import { 
   X, 
   Heart, 
@@ -14,7 +15,10 @@ import {
   Layers, 
   Sparkles,
   ExternalLink,
-  Zap
+  Zap,
+  Compass,
+  MapPin,
+  Laptop
 } from 'lucide-react';
 
 interface CareerDetailModalProps {
@@ -43,10 +47,9 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
   const primaryDim = RIASEC_DIMENSIONS[career.riasecPrimary];
   const secondaryDim = RIASEC_DIMENSIONS[career.riasecSecondary];
 
-  // Find linked universities
-  const linkedUnis: University[] = UNIVERSITIES_DATA.filter(uni => 
-    career.suggestedUniversities.includes(uni.id)
-  );
+  // Resuelve las ofertas universitarias con duración, semestres, valor y sede específicos por institución
+  const universityOfferings = getCareerUniversityOfferings(career, UNIVERSITIES_DATA);
+  const officialSpecs = getOfficialSemesters(career.name, career.degreeType, career.level);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
@@ -107,36 +110,73 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
               <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
                 <Clock className="w-3.5 h-3.5 text-purple-500" />
-                <span>Duración</span>
+                <span>Duración Oficial</span>
               </div>
-              <p className="text-xs sm:text-sm font-bold text-slate-900">{career.duration}</p>
+              <p className="text-xs sm:text-sm font-bold text-slate-900">
+                {officialSpecs.duration}
+              </p>
+              <p className="text-[11px] text-purple-700 font-semibold mt-0.5">
+                {officialSpecs.semesters} semestres académicos
+              </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
               <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
                 <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Salario Promedio</span>
-              </div>
-              <p className="text-xs sm:text-sm font-bold text-slate-900">{career.averageSalaryRange}</p>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
-                <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Empleabilidad</span>
-              </div>
-              <p className="text-xs sm:text-sm font-bold text-slate-900">{career.employabilityRate}</p>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
-                <Zap className="w-3.5 h-3.5 text-amber-500" />
-                <span>Perfil RIASEC</span>
+                <span>Costo del Semestre</span>
               </div>
               <p className="text-xs sm:text-sm font-bold text-slate-900">
-                {primaryDim.shortName} / {secondaryDim.shortName}
+                {universityOfferings.some(o => o.type === 'Pública') ? 'Desde $0 COP (Pública)' : (career.semesterTuition || 'Específico por universidad')}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                Ver detalle por institución en la sección inferior
               </p>
             </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
+                <GraduationCap className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Nivel de Formación</span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-slate-900">
+                {career.level || career.degreeType || 'Profesional Universitario'}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Modalidad: {career.modality || 'Presencial'}
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium mb-1">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+                <span>Empleabilidad y Salario</span>
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-slate-900">{career.employabilityRate} vinculación</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">{career.averageSalaryRange}</p>
+            </div>
+          </div>
+
+          {/* Cities Offered & Regional Coverage */}
+          <div className="p-4 rounded-2xl bg-purple-50/70 backdrop-blur-xl border border-purple-100/80 space-y-2 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-bold text-purple-900">
+              <Compass className="w-4 h-4 text-purple-600" />
+              <span>Ciudades y Regiones donde se ofrece esta carrera</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(universityOfferings.length > 0
+                ? Array.from(new Set(universityOfferings.map(o => o.city)))
+                : (career.citiesOffered && career.citiesOffered.length > 0 
+                  ? career.citiesOffered 
+                  : ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Bucaramanga'])
+              ).map((city, cIdx) => (
+                <span key={cIdx} className="px-2.5 py-1 rounded-lg bg-white/90 border border-purple-200/60 text-xs text-slate-700 font-medium shadow-2xs">
+                  📍 {city}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 pt-1">
+              *Información sujeta al registro calificado vigente de cada institución ante el Ministerio de Educación Nacional (SNIES).
+            </p>
           </div>
 
           {/* Description */}
@@ -145,7 +185,12 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
               <BookOpen className="w-4 h-4 text-purple-600" />
               <span>¿De qué trata esta carrera?</span>
             </h3>
-            <p className="text-sm text-slate-700 leading-relaxed">{career.fullDescription}</p>
+            <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
+              {career.shortDescription}
+            </p>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed pt-1">
+              {career.fullDescription}
+            </p>
           </div>
 
           {/* Necessary Skills & Competencies */}
@@ -200,48 +245,104 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
             </ul>
           </div>
 
-          {/* Recommended Universities Offering the Career */}
-          {linkedUnis.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <GraduationCap className="w-4 h-4 text-purple-600" />
-                  <span>Universidades Destacadas que la ofrecen</span>
-                </h3>
+          {/* 🏫 Universidades que ofrecen la carrera: Semestres y Costo Específico */}
+          {universityOfferings.length > 0 && (
+            <div className="space-y-3.5 pt-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-100 pb-2">
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+                    <span>Universidades que ofrecen esta carrera: Duración y Costo Semestral</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Información oficial sobre semestres, valor de matrícula y sedes por institución.
+                  </p>
+                </div>
                 <button
                   onClick={() => {
                     onClose();
                     onNavigateToView('universities');
                   }}
-                  className="text-xs text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 hover:underline"
+                  className="text-xs text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1 hover:underline ml-auto"
                 >
-                  <span>Ver todas</span>
+                  <span>Ver todas las IES</span>
                   <ExternalLink className="w-3 h-3" />
                 </button>
               </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                {linkedUnis.map(uni => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {universityOfferings.map((offering) => (
                   <div
-                    key={uni.id}
-                    className="p-3.5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 hover:border-purple-300 hover:bg-white/90 transition-all flex items-center justify-between gap-3 shadow-xs"
+                    key={offering.universityId}
+                    className="p-4 rounded-2xl bg-white/80 backdrop-blur-xl border border-purple-100/90 hover:border-purple-300 hover:bg-white hover:shadow-md transition-all space-y-3 shadow-xs"
                   >
-                    <div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/80 text-slate-700 border border-slate-200/60">
-                        {uni.type}
-                      </span>
-                      <p className="text-xs font-bold text-slate-900 mt-1">{uni.name}</p>
-                      <p className="text-[11px] text-slate-500">{uni.city}, {uni.country}</p>
+                    {/* Header de la Universidad */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            offering.type === 'Pública'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          }`}>
+                            {offering.type}
+                          </span>
+                          {offering.accreditation && (
+                            <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200/60 px-1.5 py-0.5 rounded">
+                              Alta Calidad
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-snug">
+                          🏫 {offering.universityName}
+                        </h4>
+                      </div>
+
+                      {offering.websiteUrl && (
+                        <a
+                          href={offering.websiteUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors border border-purple-200/60 shrink-0"
+                          title={`Sitio oficial de ${offering.universityName}`}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
                     </div>
-                    <a
-                      href={uni.websiteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 rounded-xl bg-purple-100/70 text-purple-700 hover:bg-purple-200/80 transition-colors border border-purple-200/50 shadow-xs"
-                      title="Visitar sitio web oficial"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                    </a>
+
+                    {/* Especificaciones Académicas */}
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100 text-slate-700">
+                      <div className="flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <span><strong>📚 Semestres:</strong> {offering.semestersCount}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span><strong>📍 Ciudad:</strong> {offering.city}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 col-span-2">
+                        <Laptop className="w-3.5 h-3.5 text-pink-600 shrink-0" />
+                        <span><strong>💻 Modalidad:</strong> {offering.modality}</span>
+                      </div>
+                    </div>
+
+                    {/* 💰 Valor del Semestre Relacionado con la Universidad Específica */}
+                    <div className={`p-2.5 rounded-xl border text-xs leading-relaxed ${
+                      offering.type === 'Pública'
+                        ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                        : offering.semesterTuition.includes('Consultar')
+                          ? 'bg-slate-50 border-slate-200 text-slate-700'
+                          : 'bg-purple-50/70 border-purple-200 text-purple-950'
+                    }`}>
+                      <div className="font-extrabold flex items-center gap-1">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Valor por semestre:</span>
+                      </div>
+                      <p className="mt-0.5 font-medium">
+                        {offering.semesterTuition}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
