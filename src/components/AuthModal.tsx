@@ -111,13 +111,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    const numericAge = Number(age);
+    if (!age || isNaN(numericAge) || numericAge < 8 || numericAge > 99) {
+      setErrorMsg('Por favor responde "¿Qué edad tienes?" ingresando una edad válida entre 8 y 99 años para adaptar tu experiencia.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await StorageController.registerUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        age: Number(age) || 17,
+        age: numericAge,
         educationLevel,
         city: city.trim(),
         country: country.trim()
@@ -174,19 +180,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
       <div
         id="auth-modal-card"
         className="relative w-full max-w-lg bg-white/85 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/80 overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Header with pastel background */}
-        <div className="p-6 bg-gradient-to-br from-pink-100/80 via-purple-100/70 to-amber-50/80 backdrop-blur-md border-b border-white/60 flex items-start justify-between">
+        <div className="p-4 sm:p-6 bg-gradient-to-br from-pink-100/80 via-purple-100/70 to-amber-50/80 backdrop-blur-md border-b border-white/60 flex items-start justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/90 backdrop-blur-xs shadow-xs border border-white/80 flex items-center justify-center text-pink-600">
-              <Sparkles className="w-6 h-6" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-white/90 backdrop-blur-xs shadow-xs border border-white/80 flex items-center justify-center text-pink-600 shrink-0">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 font-['Outfit',sans-serif]">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-['Outfit',sans-serif]">
                 {mode === 'login' && 'Iniciar Sesión'}
                 {mode === 'register' && 'Crear Cuenta Estudiantil'}
                 {mode === 'forgot-password' && 'Recuperar Contraseña'}
@@ -212,7 +218,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Content body */}
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
           {errorMsg && (
             <div className="p-3.5 rounded-2xl bg-rose-50/80 backdrop-blur-sm border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
               <KeyRound className="w-4 h-4 shrink-0" />
@@ -391,19 +397,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Edad</label>
-                  <input
-                    id="register-age-input"
-                    type="number"
-                    min={12}
-                    max={99}
-                    value={age}
-                    onChange={e => setAge(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="w-full px-3.5 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
-                  />
+              {/* Campo Obligatorio de Personalización por Edad */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-50/80 to-pink-50/80 border border-purple-200/70 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="register-age-input" className="block text-xs font-bold text-purple-950">
+                    ¿Qué edad tienes? *
+                  </label>
+                  {age !== '' && Number(age) >= 8 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-purple-700 border border-purple-200 shadow-xs">
+                      {Number(age) <= 12 ? '👶 Etapa Infancia' : Number(age) <= 17 ? '🎒 Etapa Adolescencia' : Number(age) <= 25 ? '🎓 Etapa Juventud' : '💼 Etapa Adultez'}
+                    </span>
+                  )}
                 </div>
+                <input
+                  id="register-age-input"
+                  type="number"
+                  min={8}
+                  max={99}
+                  required
+                  value={age}
+                  onChange={e => setAge(e.target.value === '' ? '' : Number(e.target.value))}
+                  placeholder="Ingresa tu edad (ej. 16)"
+                  className="w-full px-3.5 py-2 rounded-xl border border-purple-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400/50 shadow-xs font-semibold"
+                />
+                <p className="text-[11px] text-purple-900/80 leading-tight">
+                  Tu edad se utiliza exclusivamente para adaptar el lenguaje, la cantidad de preguntas y los ejemplos de los tests a tu momento de vida. No limita tus posibilidades profesionales ni tus opciones de carrera.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">País / Ciudad</label>
                   <div className="relative">
@@ -418,24 +440,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel Educativo Actual</label>
-                <div className="relative">
-                  <GraduationCap className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <select
-                    id="register-education-level-select"
-                    value={educationLevel}
-                    onChange={e => setEducationLevel(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
-                  >
-                    <option value="Secundaria / Bachillerato (9°-10°)">Secundaria / Bachillerato (Grados 9°-10°)</option>
-                    <option value="Último año de Bachillerato / Secundaria">Último año de Bachillerato / 11°-12°</option>
-                    <option value="Graduado de Bachiller / En búsqueda de carrera">Graduado de Bachiller / En búsqueda de carrera</option>
-                    <option value="Estudiante Técnico / Tecnológico">Estudiante Técnico / Tecnológico</option>
-                    <option value="Estudiante Universitario (Reorientación)">Estudiante Universitario (Cambio de carrera)</option>
-                  </select>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nivel Educativo</label>
+                  <div className="relative">
+                    <GraduationCap className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <select
+                      id="register-education-level-select"
+                      value={educationLevel}
+                      onChange={e => setEducationLevel(e.target.value)}
+                      className="w-full pl-8 pr-2 py-2 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-400/50 focus:bg-white shadow-xs"
+                    >
+                      <option value="Primaria / Básica">Primaria / Básica</option>
+                      <option value="Secundaria / Grados 6°-9°">Secundaria (Grados 6°-9°)</option>
+                      <option value="Secundaria / Bachillerato (9°-10°)">Bachillerato (Grados 9°-10°)</option>
+                      <option value="Último año de Bachillerato / Secundaria">Último año / 11°</option>
+                      <option value="Graduado de Bachiller / En búsqueda de carrera">Bachiller graduado</option>
+                      <option value="Estudiante Técnico / Tecnológico">Estudiante Técnico / Tecnológico</option>
+                      <option value="Estudiante Universitario / Profesional">Universitario / Profesional</option>
+                      <option value="Profesional en reorientación laboral">En reorientación laboral</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 

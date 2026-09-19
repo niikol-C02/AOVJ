@@ -115,15 +115,19 @@ export const CareerCompareModal: React.FC<CareerCompareModalProps> = ({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto pb-4">
-              <div className={`grid gap-4 min-w-[600px] ${
-                selectedCareers.length === 1 ? 'grid-cols-1 max-w-lg mx-auto' : 
-                selectedCareers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
-              }`}>
+            <div>
+              <p className="text-[11px] text-purple-700 bg-purple-50/80 px-3 py-1.5 rounded-xl border border-purple-100 sm:hidden mb-2.5 flex items-center gap-1.5 font-medium">
+                <span>👉 Desliza horizontalmente para explorar y comparar las carreras</span>
+              </p>
+              <div className="overflow-x-auto pb-4">
+                <div className={`grid gap-4 min-w-[560px] sm:min-w-[640px] ${
+                  selectedCareers.length === 1 ? 'grid-cols-1 max-w-lg mx-auto' : 
+                  selectedCareers.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+                }`}>
                 {selectedCareers.map(career => {
                   const primaryDim = RIASEC_DIMENSIONS[career.riasecPrimary];
                   const secondaryDim = RIASEC_DIMENSIONS[career.riasecSecondary];
-                  const matchObj = latestTestResult?.recommendedCareers.find(rc => rc.careerId === career.id);
+                  const matchObj = latestTestResult?.recommendedCareers?.find(rc => rc.careerId === career.id);
 
                   return (
                     <div
@@ -221,7 +225,7 @@ export const CareerCompareModal: React.FC<CareerCompareModalProps> = ({
                             Habilidades Principales
                           </p>
                           <div className="flex flex-wrap gap-1">
-                            {career.necessarySkills.slice(0, 3).map((sk, idx) => (
+                            {(career.necessarySkills || []).slice(0, 3).map((sk, idx) => (
                               <span key={idx} className="px-2 py-0.5 rounded-lg bg-white/80 backdrop-blur-sm text-slate-700 text-[10px] font-medium border border-white/80">
                                 {sk}
                               </span>
@@ -246,7 +250,8 @@ export const CareerCompareModal: React.FC<CareerCompareModalProps> = ({
                 })}
               </div>
             </div>
-          )}
+          </div>
+        )}
         </div>
 
         {/* Footer */}

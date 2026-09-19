@@ -1266,6 +1266,62 @@ export const VOCATIONAL_QUESTION_BANK: Question[] = [
     "category": "C",
     "area": "preferencias",
     "topic": "cumplimiento normativo"
+  },
+  {
+    "id": 181,
+    "text": "¿Te llama la atención maquillar, peinar o asesorar a personas sobre cómo cuidar su piel y mejorar su imagen personal?",
+    "category": "A",
+    "area": "intereses",
+    "topic": "estética y belleza"
+  },
+  {
+    "id": 182,
+    "text": "¿Disfrutas realizar trabajos manuales minuciosos como pintar, esculpir, tejer, bordar o diseñar accesorios y joyería?",
+    "category": "R",
+    "area": "habilidades",
+    "topic": "arte manual y joyería"
+  },
+  {
+    "id": 183,
+    "text": "¿Te entusiasma la idea de diseñar y confeccionar prendas de ropa, crear moldes de patronaje o combinar texturas textiles?",
+    "category": "A",
+    "area": "intereses",
+    "topic": "diseño de modas y confección"
+  },
+  {
+    "id": 184,
+    "text": "¿Te gustaría aprender técnicas profesionales de corte de cabello, barbería, diseño de barba o escultura de uñas?",
+    "category": "R",
+    "area": "habilidades",
+    "topic": "barbería y estilismo"
+  },
+  {
+    "id": 185,
+    "text": "¿Te apasiona grabar y editar videos, tomar fotografías de estudio o crear contenido visual cautivador para plataformas digitales?",
+    "category": "A",
+    "area": "intereses",
+    "topic": "producción audiovisual y fotografía"
+  },
+  {
+    "id": 186,
+    "text": "¿Te imaginas decorando y transformando espacios interiores, eligiendo colores, iluminación, muebles y arreglos florales?",
+    "category": "A",
+    "area": "intereses",
+    "topic": "diseño de interiores y decoración"
+  },
+  {
+    "id": 187,
+    "text": "¿Te sientes atraído por actuar en teatro o televisión, bailar coreografías expresivas o cantar e interpretar un instrumento?",
+    "category": "A",
+    "area": "habilidades",
+    "topic": "artes escénicas y música"
+  },
+  {
+    "id": 188,
+    "text": "¿Te gustaría emprender tu propio estudio de belleza, salón de estilismo, taller de costura o marca de arte independiente?",
+    "category": "E",
+    "area": "preferencias",
+    "topic": "emprendimiento creativo"
   }
 ];
 

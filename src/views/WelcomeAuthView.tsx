@@ -39,6 +39,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
+  const [age, setAge] = useState<number | ''>(17);
   const [educationLevel, setEducationLevel] = useState('Último año de Bachillerato / Secundaria');
   const [city, setCity] = useState('');
 
@@ -133,12 +134,19 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
       return;
     }
 
+    const numericAge = Number(age);
+    if (!age || isNaN(numericAge) || numericAge < 8 || numericAge > 99) {
+      setErrorMsg('Por favor responde "¿Qué edad tienes?" ingresando una edad válida entre 8 y 99 años para adaptar tu experiencia.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await StorageController.registerUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
+        age: numericAge,
         educationLevel,
         city: city.trim(),
         country: 'Colombia'
@@ -597,6 +605,34 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                     confirmPassword={confirmPassword}
                   />
                 )}
+
+                {/* Campo Obligatorio: ¿Qué edad tienes? */}
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200/80 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="welcome-register-age" className="block text-xs font-bold text-purple-950 font-['Outfit',sans-serif]">
+                      ¿Qué edad tienes? *
+                    </label>
+                    {age !== '' && Number(age) >= 8 && (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white text-purple-700 border border-purple-200 shadow-xs">
+                        {Number(age) <= 12 ? '👶 Etapa Infancia' : Number(age) <= 17 ? '🎒 Etapa Adolescencia' : Number(age) <= 25 ? '🎓 Etapa Juventud' : '💼 Etapa Adultez'}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    id="welcome-register-age"
+                    type="number"
+                    min={8}
+                    max={99}
+                    required
+                    value={age}
+                    onChange={e => setAge(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="Ingresa tu edad (ej. 16)"
+                    className="w-full px-3.5 py-2 rounded-xl border border-purple-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-400/50 shadow-xs"
+                  />
+                  <p className="text-[11px] text-purple-900/80 leading-tight">
+                    Tu edad se utiliza exclusivamente para adaptar el lenguaje, la cantidad de preguntas y los ejemplos de los tests a tu momento de vida. No limita tus posibilidades profesionales ni tus opciones de carrera.
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>

@@ -120,6 +120,34 @@ export class TestEngine {
       highInterestTopics.has('justicia social') ||
       highInterestTopics.has('litigio y derecho');
 
+    const hasBeautyEstheticsInterest =
+      highInterestTopics.has('estética y belleza') ||
+      highInterestTopics.has('barbería y estilismo') ||
+      highInterestTopics.has('cuidado de la piel') ||
+      highInterestTopics.has('cosmetología');
+
+    const hasManualArtFashionInterest =
+      highInterestTopics.has('arte manual y joyería') ||
+      highInterestTopics.has('diseño de modas y confección') ||
+      highInterestTopics.has('artes plásticas') ||
+      highInterestTopics.has('artesanía');
+
+    const hasAudiovisualMediaInterest =
+      highInterestTopics.has('producción audiovisual y fotografía') ||
+      highInterestTopics.has('animación') ||
+      highInterestTopics.has('cine') ||
+      highInterestTopics.has('fotografía');
+
+    const hasInteriorDecorInterest =
+      highInterestTopics.has('diseño de interiores y decoración') ||
+      highInterestTopics.has('diseño floral') ||
+      highInterestTopics.has('arquitectura');
+
+    const hasPerformingArtsMusicInterest =
+      highInterestTopics.has('artes escénicas y música') ||
+      highInterestTopics.has('teatro') ||
+      highInterestTopics.has('música');
+
     const matches = careers.map(career => {
       const primaryScore = scores[career.riasecPrimary] || 50;
       const secondaryScore = scores[career.riasecSecondary] || 50;
@@ -127,9 +155,11 @@ export class TestEngine {
       // Primary dimension has 60% weight, secondary has 30%, overall balance has 10%
       let baseMatch = (primaryScore * 0.6) + (secondaryScore * 0.3) + 10;
 
-      // Specific interest boost for Criminology, Criminalistics & Forensics
       const careerIdLower = career.id.toLowerCase();
       const careerNameLower = career.name.toLowerCase();
+      const careerAreaLower = career.area.toLowerCase();
+
+      // Specific interest boost for Criminology, Criminalistics & Forensics
       const isCriminologyOrCriminalistics = 
         careerIdLower.includes('criminalistica') ||
         careerIdLower.includes('criminologia') ||
@@ -139,7 +169,68 @@ export class TestEngine {
         careerNameLower.includes('investigación judicial');
 
       if (isCriminologyOrCriminalistics && hasCrimeInvestigativeInterest) {
-        baseMatch += 8; // strong boost when student specifically marked interest in forensics/justice
+        baseMatch += 8;
+      }
+
+      // Specific interest boost for Beauty & Aesthetics
+      const isBeautyOrEsthetics =
+        careerAreaLower.includes('belleza') ||
+        careerAreaLower.includes('estética') ||
+        careerIdLower.includes('cosmetologia') ||
+        careerIdLower.includes('maquillaje') ||
+        careerIdLower.includes('barberia') ||
+        careerIdLower.includes('unas') ||
+        careerIdLower.includes('peluqueria');
+
+      if (isBeautyOrEsthetics && hasBeautyEstheticsInterest) {
+        baseMatch += 8;
+      }
+
+      // Specific interest boost for Fashion & Garments
+      const isFashionOrTextile =
+        careerAreaLower.includes('moda') ||
+        careerAreaLower.includes('confección') ||
+        careerIdLower.includes('patronaje') ||
+        careerIdLower.includes('joyeria') ||
+        careerIdLower.includes('textil');
+
+      if (isFashionOrTextile && hasManualArtFashionInterest) {
+        baseMatch += 8;
+      }
+
+      // Specific interest boost for Audiovisual & Photography
+      const isAudiovisual =
+        careerAreaLower.includes('audiovisual') ||
+        careerIdLower.includes('fotografia') ||
+        careerIdLower.includes('cine') ||
+        careerIdLower.includes('animacion') ||
+        careerIdLower.includes('video');
+
+      if (isAudiovisual && hasAudiovisualMediaInterest) {
+        baseMatch += 8;
+      }
+
+      // Specific interest boost for Interior Design & Decoration
+      const isDecorOrInterior =
+        careerAreaLower.includes('decoración') ||
+        careerAreaLower.includes('interior') ||
+        careerIdLower.includes('floral');
+
+      if (isDecorOrInterior && hasInteriorDecorInterest) {
+        baseMatch += 8;
+      }
+
+      // Specific interest boost for Performing Arts & Music
+      const isPerformingOrMusic =
+        careerAreaLower.includes('expresión artística') ||
+        careerAreaLower.includes('artes escénicas') ||
+        careerIdLower.includes('teatro') ||
+        careerIdLower.includes('danza') ||
+        careerIdLower.includes('musica') ||
+        careerIdLower.includes('canto');
+
+      if (isPerformingOrMusic && hasPerformingArtsMusicInterest) {
+        baseMatch += 8;
       }
 
       // Contextual personalization: City & Region availability
@@ -161,16 +252,26 @@ export class TestEngine {
       // Bound between 48% and 99%
       const clampedMatch = Math.min(99, Math.max(48, Math.round(baseMatch)));
 
-      // Generate brief, personalized explanation
+      // Generate orientative and inclusive explanation (never imperative)
       let explanation = '';
-      if (careerIdLower.includes('criminalistica') || careerNameLower.includes('criminalística')) {
-        explanation = 'Tus respuestas reflejaron curiosidad analítica, rigor para examinar evidencias y gusto por la resolución científica de hechos.';
+      if (isBeautyOrEsthetics) {
+        explanation = `Podrías explorar áreas afines a ${career.name.toLowerCase()}, donde tu sensibilidad por el cuidado, la estética y la interacción con personas encontrarán un camino ideal de desarrollo.`;
+      } else if (isFashionOrTextile) {
+        explanation = `Podrías considerar explorar el universo de ${career.name.toLowerCase()}, aprovechando tu interés por la creatividad manual, los materiales y el diseño de indumentaria.`;
+      } else if (isAudiovisual) {
+        explanation = `Una excelente alternativa orientativa para ti podría ser ${career.name.toLowerCase()}, dada tu afinidad con la narración visual, la imagen y los medios contemporáneos.`;
+      } else if (isDecorOrInterior) {
+        explanation = `Podrías explorar opciones relacionadas con ${career.name.toLowerCase()}, donde tu sentido estético para armonizar entornos y transformar espacios cobrará vida.`;
+      } else if (isPerformingOrMusic) {
+        explanation = `Podrías explorar campos vinculados a ${career.name.toLowerCase()}, pues tus intereses reflejan pasión por la autoexpresión, la sensibilidad escénica y el arte sonoro.`;
+      } else if (careerIdLower.includes('criminalistica') || careerNameLower.includes('criminalística')) {
+        explanation = 'Podrías explorar la investigación forense y las ciencias periciales, acorde a tu curiosidad analítica y gusto por examinar evidencias.';
       } else if (careerIdLower.includes('criminologia') || careerNameLower.includes('criminología')) {
-        explanation = 'Tus respuestas destacaron un marcado interés por comprender la conducta humana, las problemáticas sociales y la justicia.';
+        explanation = 'Podrías explorar áreas relacionadas con la criminología y la conducta humana, impulsado por tu sensibilidad hacia la justicia social.';
       } else {
         const pDim = RIASEC_DIMENSIONS[career.riasecPrimary];
         const sDim = RIASEC_DIMENSIONS[career.riasecSecondary];
-        explanation = `Recomendada por tu destacada afinidad con el perfil ${pDim?.name || career.riasecPrimary} (${primaryScore}%) y ${sDim?.name || career.riasecSecondary} (${secondaryScore}%), fundamentales en esta profesión.`;
+        explanation = `Podrías explorar este campo vocacional, respaldado por tu afinidad con los perfiles ${pDim?.name || career.riasecPrimary} (${primaryScore}%) y ${sDim?.name || career.riasecSecondary} (${secondaryScore}%).`;
       }
 
       return {

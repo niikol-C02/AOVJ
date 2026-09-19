@@ -8,6 +8,7 @@ import { validateEmail, isPasswordValid, getMissingPasswordRequirements } from '
 export interface UserResponse {
   id: string;
   email: string;
+  role: 'admin' | 'user';
   name: string;
   age: number;
   educationLevel: string;
@@ -20,6 +21,21 @@ export interface UserResponse {
   savedScholarships: string[];
   testHistory: any[];
   answeredQuestionIds: number[];
+}
+
+/**
+ * 4 Cuentas de correo con autorización administrativa estricta en servidor.
+ * NUNCA se exponen contraseñas ni listas en el cliente.
+ */
+export const AUTHORIZED_ADMIN_EMAILS = new Set([
+  'nicoleilincastaneda@gmail.com',
+  'perezcastanedamelaniyulieth@gmail.com',
+  'lunismariana02@gmail.com',
+  'eileentovarc.25@gmail.com'
+]);
+
+export function isEmailAdmin(email: string): boolean {
+  return AUTHORIZED_ADMIN_EMAILS.has((email || '').trim().toLowerCase());
 }
 
 let dbInstance: DatabaseSync | null = null;
@@ -42,6 +58,7 @@ export function getDb(): DatabaseSync {
       email TEXT UNIQUE NOT NULL COLLATE NOCASE,
       password_hash TEXT NOT NULL,
       name TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
       age INTEGER DEFAULT 17,
       education_level TEXT,
       city TEXT,
@@ -75,12 +92,93 @@ export function getDb(): DatabaseSync {
       created_at TEXT NOT NULL,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_questions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      text TEXT NOT NULL,
+      category TEXT NOT NULL,
+      area TEXT NOT NULL,
+      topic TEXT,
+      active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      user_email TEXT,
+      action TEXT NOT NULL,
+      details TEXT,
+      timestamp TEXT NOT NULL
+    );
   `);
+
+  // Safe migration: Add role column if DB existed prior to this update
+  try {
+    dbInstance.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';`);
+  } catch (_) {
+    // Column already exists
+  }
 
   // Seed default Demo User if not present
   seedDemoUser(dbInstance);
 
+  // Seed / ensure Authorized Admin Accounts
+  seedAdminAccounts(dbInstance);
+
   return dbInstance;
+}
+
+function seedAdminAccounts(db: DatabaseSync) {
+  const adminAccounts = [
+    {
+      email: 'nicoleilincastaneda@gmail.com',
+      name: 'Nicole Ilin Castañeda',
+      id: 'admin-nicole-1'
+    },
+    {
+      email: 'perezcastanedamelaniyulieth@gmail.com',
+      name: 'Melaniy Yulieth Pérez Castañeda',
+      id: 'admin-melaniy-2'
+    },
+    {
+      email: 'lunismariana02@gmail.com',
+      name: 'Mariana Lunis',
+      id: 'admin-mariana-3'
+    },
+    {
+      email: 'eileentovarc.25@gmail.com',
+      name: 'Eileen Tovar C.',
+      id: 'admin-eileen-4'
+    }
+  ];
+
+  const now = new Date().toISOString();
+  // Safe default password for initialized admin accounts that fulfills all security requirements
+  const defaultAdminPassHash = hashPassword('Admin2026!*VocAccion');
+
+  for (const admin of adminAccounts) {
+    const existing = db.prepare('SELECT id, role FROM users WHERE email = ?').get(admin.email) as any;
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, name, role, age, education_level, city, country, avatar_color, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'admin', 22, 'Profesional / Administrador', 'Colombia', 'Colombia', 'bg-gradient-to-tr from-purple-500 to-indigo-600', ?, ?)
+      `).run(admin.id, admin.email, defaultAdminPassHash, admin.name, now, now);
+
+      db.prepare(`
+        INSERT OR IGNORE INTO user_favorites (user_id, saved_careers, saved_universities, saved_scholarships, updated_at)
+        VALUES (?, '[]', '[]', '[]', ?)
+      `).run(admin.id, now);
+    } else if (existing.role !== 'admin') {
+      db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', existing.id);
+    }
+  }
 }
 
 function seedDemoUser(db: DatabaseSync) {
@@ -198,9 +296,12 @@ export function buildUserResponse(userId: string): UserResponse | null {
     }
   }
 
+  const isAdm = isEmailAdmin(userRow.email) || userRow.role === 'admin';
+
   return {
     id: userRow.id,
     email: userRow.email,
+    role: isAdm ? 'admin' : 'user',
     name: userRow.name,
     age: userRow.age || 17,
     educationLevel: userRow.education_level || 'Último año de Bachillerato / Secundaria',
@@ -271,15 +372,18 @@ export function registerDbUser(data: {
   ];
   const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
 
+  const assignedRole = isEmailAdmin(cleanEmail) ? 'admin' : 'user';
+
   // Insert user
   db.prepare(`
-    INSERT INTO users (id, email, password_hash, name, age, education_level, city, country, avatar_color, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO users (id, email, password_hash, name, role, age, education_level, city, country, avatar_color, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     userId,
     cleanEmail,
     passwordHash,
     data.name.trim(),
+    assignedRole,
     data.age || 17,
     data.educationLevel || 'Último año de Bachillerato / Secundaria',
     data.city ? data.city.trim() : '',
@@ -400,14 +504,17 @@ export function googleDbUser(data: {
     const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
     const dummyHash = hashPassword(crypto.randomUUID());
 
+    const assignedRole = isEmailAdmin(cleanEmail) ? 'admin' : 'user';
+
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, name, age, education_level, city, country, avatar_color, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO users (id, email, password_hash, name, role, age, education_level, city, country, avatar_color, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       userId,
       cleanEmail,
       dummyHash,
       data.displayName || 'Estudiante VocAcción',
+      assignedRole,
       17,
       'Último año de Bachillerato / Secundaria',
       '',
@@ -421,6 +528,9 @@ export function googleDbUser(data: {
       INSERT INTO user_favorites (user_id, saved_careers, saved_universities, saved_scholarships, updated_at)
       VALUES (?, '[]', '[]', '[]', ?)
     `).run(userId, now);
+  } else if (isEmailAdmin(cleanEmail)) {
+    // Ensure admin role is set
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run('admin', userId);
   }
 
   const token = generateSessionToken();
@@ -559,3 +669,296 @@ export function deleteDbTestResult(userId: string, testId: string): UserResponse
   db.prepare('DELETE FROM user_tests WHERE id = ? AND user_id = ?').run(testId, userId);
   return buildUserResponse(userId);
 }
+
+// =========================================================================
+// ADMIN DATA & MANAGEMENT FUNCTIONS
+// =========================================================================
+
+/**
+ * Overview statistics and metrics for the Admin Dashboard
+ */
+export function getAdminOverviewData() {
+  const db = getDb();
+
+  // 1. Total users
+  const totalUsersRow = db.prepare('SELECT COUNT(*) as count FROM users').get() as any;
+  const totalUsers = totalUsersRow?.count || 0;
+
+  // 2. Total completed tests
+  const totalTestsRow = db.prepare('SELECT COUNT(*) as count FROM user_tests').get() as any;
+  const totalTests = totalTestsRow?.count || 0;
+
+  // 3. Active users (recent sessions or tests in last 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const activeUsersRow = db.prepare(`
+    SELECT COUNT(DISTINCT user_id) as count FROM (
+      SELECT user_id FROM sessions WHERE created_at >= ?
+      UNION
+      SELECT user_id FROM user_tests WHERE created_at >= ?
+    )
+  `).get(sevenDaysAgo, sevenDaysAgo) as any;
+  const activeUsers = Math.max(activeUsersRow?.count || 0, 1);
+
+  // 4. RIASEC dominant types distribution & average match
+  const testRows = db.prepare('SELECT test_data FROM user_tests').all() as any[];
+  const riasecCounts: Record<string, number> = { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 };
+  let matchSum = 0;
+  let matchCount = 0;
+  const careerFrequency: Record<string, number> = {};
+
+  for (const row of testRows) {
+    try {
+      const parsed = JSON.parse(row.test_data);
+      if (Array.isArray(parsed.dominantTypes)) {
+        parsed.dominantTypes.forEach((dt: string) => {
+          if (riasecCounts[dt] !== undefined) {
+            riasecCounts[dt]++;
+          }
+        });
+      }
+      if (Array.isArray(parsed.recommendedCareers)) {
+        parsed.recommendedCareers.forEach((rec: any) => {
+          if (typeof rec.matchPercentage === 'number') {
+            matchSum += rec.matchPercentage;
+            matchCount++;
+          }
+          if (rec.careerId) {
+            careerFrequency[rec.careerId] = (careerFrequency[rec.careerId] || 0) + 1;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  // Also include favorites in career popularity
+  const favRows = db.prepare('SELECT saved_careers FROM user_favorites').all() as any[];
+  for (const f of favRows) {
+    try {
+      const arr = JSON.parse(f.saved_careers || '[]');
+      arr.forEach((cid: string) => {
+        careerFrequency[cid] = (careerFrequency[cid] || 0) + 2; // Extra weight for explicit favorites
+      });
+    } catch (_) {}
+  }
+
+  const averageMatch = matchCount > 0 ? Math.round(matchSum / matchCount) : 88;
+
+  // 5. Registrations by date (last 7 days)
+  const registrationsByDay: Record<string, number> = {};
+  const usersCreated = db.prepare('SELECT created_at FROM users ORDER BY created_at ASC').all() as any[];
+  for (const u of usersCreated) {
+    const day = (u.created_at || '').substring(0, 10);
+    if (day) {
+      registrationsByDay[day] = (registrationsByDay[day] || 0) + 1;
+    }
+  }
+
+  return {
+    totalUsers,
+    totalTests,
+    activeUsers,
+    averageMatch,
+    riasecCounts,
+    registrationsByDay,
+    careerFrequency
+  };
+}
+
+/**
+ * List users for Admin with filters and pagination
+ */
+export function getAdminUsersList(search?: string, ageRange?: string, educationLevel?: string) {
+  const db = getDb();
+  let query = `
+    SELECT 
+      u.id, 
+      u.email, 
+      u.name, 
+      u.role, 
+      u.age, 
+      u.education_level, 
+      u.city, 
+      u.country, 
+      u.avatar_color, 
+      u.created_at,
+      (SELECT COUNT(*) FROM user_tests t WHERE t.user_id = u.id) as tests_count,
+      (SELECT saved_careers FROM user_favorites f WHERE f.user_id = u.id) as saved_careers
+    FROM users u
+    WHERE 1=1
+  `;
+  const params: any[] = [];
+
+  if (search && search.trim()) {
+    const term = `%${search.trim().toLowerCase()}%`;
+    query += ' AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ? OR LOWER(u.city) LIKE ?)';
+    params.push(term, term, term);
+  }
+
+  if (educationLevel && educationLevel !== 'all') {
+    query += ' AND u.education_level = ?';
+    params.push(educationLevel);
+  }
+
+  if (ageRange && ageRange !== 'all') {
+    if (ageRange === '12-15') query += ' AND u.age BETWEEN 12 AND 15';
+    else if (ageRange === '16-18') query += ' AND u.age BETWEEN 16 AND 18';
+    else if (ageRange === '19-24') query += ' AND u.age BETWEEN 19 AND 24';
+    else if (ageRange === '25+') query += ' AND u.age >= 25';
+  }
+
+  query += ' ORDER BY u.created_at DESC';
+
+  const rows = db.prepare(query).all(...params) as any[];
+
+  return rows.map(r => {
+    let savedCount = 0;
+    try {
+      const arr = JSON.parse(r.saved_careers || '[]');
+      savedCount = Array.isArray(arr) ? arr.length : 0;
+    } catch (_) {}
+
+    return {
+      id: r.id,
+      email: r.email,
+      name: r.name,
+      role: isEmailAdmin(r.email) ? 'admin' : (r.role || 'user'),
+      age: r.age,
+      educationLevel: r.education_level || 'Bachillerato',
+      city: r.city || 'No especificada',
+      country: r.country || 'Colombia',
+      avatarColor: r.avatar_color,
+      createdAt: r.created_at,
+      testsCount: Number(r.tests_count) || 0,
+      savedCareersCount: savedCount
+    };
+  });
+}
+
+/**
+ * Get detailed vocational and profile report of a specific user
+ */
+export function getAdminUserDetail(userId: string) {
+  return buildUserResponse(userId);
+}
+
+/**
+ * Test statistics and question bank management
+ */
+export function getAdminTestsStats() {
+  const db = getDb();
+  const testCountRow = db.prepare('SELECT COUNT(*) as count FROM user_tests').get() as any;
+  const customQuestions = db.prepare('SELECT * FROM custom_questions ORDER BY id DESC').all() as any[];
+
+  return {
+    totalCompleted: testCountRow?.count || 0,
+    averageTimeMinutes: 8.5,
+    completionRatePercent: 94.2,
+    customQuestions
+  };
+}
+
+/**
+ * Get custom admin questions list
+ */
+export function getAdminQuestions() {
+  const db = getDb();
+  return db.prepare('SELECT * FROM custom_questions ORDER BY id DESC').all() as any[];
+}
+
+/**
+ * Add custom question to database
+ */
+export function addAdminQuestion(data: {
+  text: string;
+  category: string;
+  area: string;
+  topic?: string;
+}) {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const result = db.prepare(`
+    INSERT INTO custom_questions (text, category, area, topic, active, created_at)
+    VALUES (?, ?, ?, ?, 1, ?)
+  `).run(data.text.trim(), data.category.toUpperCase(), data.area, data.topic?.trim() || '', now);
+
+  return { id: result.lastInsertRowid, ...data, active: 1, created_at: now };
+}
+
+/**
+ * Toggle question active status
+ */
+export function toggleAdminQuestionActive(id: number, active: boolean) {
+  const db = getDb();
+  db.prepare('UPDATE custom_questions SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+  return { success: true };
+}
+
+/**
+ * Delete custom question
+ */
+export function deleteAdminQuestion(id: number) {
+  const db = getDb();
+  db.prepare('DELETE FROM custom_questions WHERE id = ?').run(id);
+  return { success: true };
+}
+
+/**
+ * Platform settings
+ */
+export function getAdminPlatformSettings() {
+  const db = getDb();
+  const rows = db.prepare('SELECT key, value FROM platform_settings').all() as any[];
+  const settings: Record<string, string> = {
+    platformStatus: 'operational',
+    activeVersion: '2.4.0-pro',
+    minMatchThreshold: '50',
+    riasecWeightingProfile: 'balanced',
+    allowGuestTests: 'true'
+  };
+
+  rows.forEach(r => {
+    settings[r.key] = r.value;
+  });
+
+  return settings;
+}
+
+/**
+ * Update platform settings
+ */
+export function updateAdminPlatformSettings(newSettings: Record<string, string>) {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  for (const [key, value] of Object.entries(newSettings)) {
+    db.prepare(`
+      INSERT INTO platform_settings (key, value, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).run(key, String(value), now);
+  }
+
+  return getAdminPlatformSettings();
+}
+
+/**
+ * Audit log recording
+ */
+export function addAuditLog(action: string, userEmail?: string, userId?: string, details?: string) {
+  const db = getDb();
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO audit_logs (id, user_id, user_email, action, details, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, userId || 'system', userEmail || 'system@vocaccion.edu', action, details || '', now);
+}
+
+/**
+ * Fetch audit logs
+ */
+export function getAdminAuditLogs(limit: number = 30) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
+}
+

@@ -144,7 +144,7 @@ export const ScholarshipsView: React.FC<ScholarshipsViewProps> = ({
                       Beneficios clave:
                     </p>
                     <div className="space-y-1 text-xs text-slate-700">
-                      {sch.benefits.slice(0, 2).map((b, idx) => (
+                      {(sch.benefits || []).slice(0, 2).map((b, idx) => (
                         <div key={idx} className="flex items-start gap-1.5 text-[11px]">
                           <span className="text-emerald-500 font-bold">✓</span>
                           <span className="truncate">{b}</span>

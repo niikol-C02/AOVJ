@@ -89,47 +89,65 @@ export class StorageController {
   }
 
   /**
+   * Obtener token de sesión activo (Bearer)
+   */
+  static getAuthToken(): string | null {
+    try {
+      return sessionStorage.getItem('vocaccion_auth_token') || localStorage.getItem('vocaccion_auth_token');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * Validar si el usuario actual cuenta con rol de Administrador
+   */
+  static isAdmin(): boolean {
+    return this.currentUser?.role === 'admin';
+  }
+
+  /**
    * Listen to Auth state changes and restore authenticated user profile if session exists
    */
   static initAuthListener(callback: (user: User | null) => void): () => void {
     this.authListeners.push(callback);
 
+    const token = this.getAuthToken();
     const hasSession = sessionStorage.getItem(ACTIVE_SESSION_FLAG) === 'true';
     const activeDocId = sessionStorage.getItem(ACTIVE_USER_ID_KEY);
 
-    if (hasSession && activeDocId) {
-      // Re-hydrate session from real Firestore
-      getDoc(doc(db, 'users', activeDocId))
-        .then(snap => {
-          if (snap.exists()) {
-            const data = snap.data();
-            const user: User = {
-              id: data.id || activeDocId,
-              email: data.email,
-              name: data.name,
-              age: data.age || 17,
-              educationLevel: data.educationLevel || 'Último año de Bachillerato / Secundaria',
-              city: data.city || '',
-              country: data.country || 'Colombia',
-              avatarColor: data.avatarColor || 'bg-gradient-to-tr from-pink-400 to-purple-500',
-              createdAt: data.createdAt || new Date().toISOString(),
-              savedCareers: Array.isArray(data.savedCareers) ? data.savedCareers : [],
-              savedUniversities: Array.isArray(data.savedUniversities) ? data.savedUniversities : [],
-              savedScholarships: Array.isArray(data.savedScholarships) ? data.savedScholarships : [],
-              testHistory: Array.isArray(data.testHistory) ? data.testHistory : [],
-              answeredQuestionIds: Array.isArray(data.answeredQuestionIds) ? data.answeredQuestionIds : []
-            };
-            this.currentUser = user;
-            callback(user);
+    // 1. Prioritize Server-side verification via Bearer token
+    if (token) {
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.ok) return res.json();
+          throw new Error('Token inválido');
+        })
+        .then(data => {
+          if (data?.user) {
+            this.currentUser = data.user;
+            sessionStorage.setItem(ACTIVE_SESSION_FLAG, 'true');
+            sessionStorage.setItem(ACTIVE_USER_ID_KEY, data.user.id);
+            sessionStorage.setItem(ACTIVE_USER_EMAIL_KEY, data.user.email);
+            callback(data.user);
           } else {
-            this.logout();
-            callback(null);
+            throw new Error('No user in response');
           }
         })
-        .catch(err => {
-          console.warn('Could not rehydrate Firestore session:', err);
-          callback(null);
+        .catch(() => {
+          // Fallback to Firestore session if server token expired or offline
+          if (hasSession && activeDocId) {
+            this.rehydrateFromFirestore(activeDocId, callback);
+          } else {
+            this.currentUser = null;
+            callback(null);
+          }
         });
+    } else if (hasSession && activeDocId) {
+      // Rehydrate from Firestore directly
+      this.rehydrateFromFirestore(activeDocId, callback);
     } else {
       // First entry: show auth gate
       this.currentUser = null;
@@ -139,6 +157,42 @@ export class StorageController {
     return () => {
       this.authListeners = this.authListeners.filter(cb => cb !== callback);
     };
+  }
+
+  private static rehydrateFromFirestore(activeDocId: string, callback: (user: User | null) => void) {
+    getDoc(doc(db, 'users', activeDocId))
+      .then(snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const user: User = {
+            id: data.id || activeDocId,
+            email: data.email,
+            role: data.role || 'user',
+            name: data.name,
+            age: data.age || 17,
+            educationLevel: data.educationLevel || 'Último año de Bachillerato / Secundaria',
+            city: data.city || '',
+            country: data.country || 'Colombia',
+            avatarColor: data.avatarColor || 'bg-gradient-to-tr from-pink-400 to-purple-500',
+            createdAt: data.createdAt || new Date().toISOString(),
+            savedCareers: Array.isArray(data.savedCareers) ? data.savedCareers : [],
+            savedUniversities: Array.isArray(data.savedUniversities) ? data.savedUniversities : [],
+            savedScholarships: Array.isArray(data.savedScholarships) ? data.savedScholarships : [],
+            testHistory: Array.isArray(data.testHistory) ? data.testHistory : [],
+            answeredQuestionIds: Array.isArray(data.answeredQuestionIds) ? data.answeredQuestionIds : [],
+            accessibilityPreferences: data.accessibilityPreferences || undefined
+          };
+          this.currentUser = user;
+          callback(user);
+        } else {
+          this.logout();
+          callback(null);
+        }
+      })
+      .catch(err => {
+        console.warn('Could not rehydrate Firestore session:', err);
+        callback(null);
+      });
   }
 
   /**
@@ -176,11 +230,50 @@ export class StorageController {
         };
       }
 
-      // 3. Generate deterministic document ID based on normalized email
+      // 3. Try Express Server Auth First
+      try {
+        const serverRes = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: cleanName,
+            email: cleanEmail,
+            password: data.password,
+            age: data.age || 17,
+            educationLevel: data.educationLevel,
+            city: data.city,
+            country: data.country
+          })
+        });
+
+        if (serverRes.ok) {
+          const resData = await serverRes.json();
+          if (resData.token) {
+            sessionStorage.setItem('vocaccion_auth_token', resData.token);
+            localStorage.setItem('vocaccion_auth_token', resData.token);
+          }
+          if (resData.user) {
+            sessionStorage.setItem(ACTIVE_SESSION_FLAG, 'true');
+            sessionStorage.setItem(ACTIVE_USER_ID_KEY, resData.user.id);
+            sessionStorage.setItem(ACTIVE_USER_EMAIL_KEY, resData.user.email);
+            this.notifyListeners(resData.user);
+            return { user: resData.user };
+          }
+        } else {
+          const errData = await serverRes.json().catch(() => null);
+          if (errData?.error && errData.error.includes('Ya existe una cuenta')) {
+            return { user: null, error: errData.error };
+          }
+        }
+      } catch (_) {
+        // Continue to Firestore registration fallback
+      }
+
+      // 4. Generate deterministic document ID based on normalized email
       const docId = await hashEmailToDocId(cleanEmail);
       const userDocRef = doc(db, 'users', docId);
 
-      // 4. Duplicate Check in Firestore Database
+      // 5. Duplicate Check in Firestore Database
       const existingSnap = await getDoc(userDocRef);
       if (existingSnap.exists()) {
         return {
@@ -279,7 +372,33 @@ export class StorageController {
         return { user: null, error: 'Por favor ingresa tu contraseña.' };
       }
 
-      // 2. Fetch user document from Firestore
+      // 2. Try Express Server Auth first (to obtain JWT/session token and role)
+      try {
+        const serverRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail, password })
+        });
+
+        if (serverRes.ok) {
+          const resData = await serverRes.json();
+          if (resData.token) {
+            sessionStorage.setItem('vocaccion_auth_token', resData.token);
+            localStorage.setItem('vocaccion_auth_token', resData.token);
+          }
+          if (resData.user) {
+            sessionStorage.setItem(ACTIVE_SESSION_FLAG, 'true');
+            sessionStorage.setItem(ACTIVE_USER_ID_KEY, resData.user.id);
+            sessionStorage.setItem(ACTIVE_USER_EMAIL_KEY, resData.user.email);
+            this.notifyListeners(resData.user);
+            return { user: resData.user };
+          }
+        }
+      } catch (_) {
+        // Fallback to Firestore
+      }
+
+      // 3. Fetch user document from Firestore
       const docId = await hashEmailToDocId(cleanEmail);
       const userDocRef = doc(db, 'users', docId);
       const snap = await getDoc(userDocRef);
@@ -327,7 +446,8 @@ export class StorageController {
         savedUniversities: Array.isArray(userData.savedUniversities) ? userData.savedUniversities : [],
         savedScholarships: Array.isArray(userData.savedScholarships) ? userData.savedScholarships : [],
         testHistory: Array.isArray(userData.testHistory) ? userData.testHistory : [],
-        answeredQuestionIds: Array.isArray(userData.answeredQuestionIds) ? userData.answeredQuestionIds : []
+        answeredQuestionIds: Array.isArray(userData.answeredQuestionIds) ? userData.answeredQuestionIds : [],
+        accessibilityPreferences: userData.accessibilityPreferences || undefined
       };
 
       // 5. Establish session

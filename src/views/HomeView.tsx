@@ -287,7 +287,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {trendingCareers.slice(0, 3).map(career => {
-            const matchObj = latestTestResult?.recommendedCareers.find(rc => rc.careerId === career.id);
+            const matchObj = latestTestResult?.recommendedCareers?.find(rc => rc.careerId === career.id);
             return (
               <div
                 key={career.id}

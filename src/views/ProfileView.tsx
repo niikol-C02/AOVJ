@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Career, Scholarship, TestResult, University, User, ViewType } from '../types';
+import { AccessibilityPreferences, Career, Scholarship, TestResult, University, User, ViewType, getAgeStage } from '../types';
 import { StorageController } from '../controllers/StorageController';
+import { AGE_STAGES_INFO } from '../models/adaptiveTestBank';
 import { 
   User as UserIcon, 
   Settings, 
@@ -18,7 +19,16 @@ import {
   Trash2, 
   ChevronRight, 
   ArrowRight,
-  Shield
+  Shield,
+  Sliders,
+  Eye,
+  Volume2,
+  Hand,
+  Brain,
+  FileText,
+  SunMedium,
+  Clock,
+  Check
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -34,6 +44,8 @@ interface ProfileViewProps {
   onSelectScholarship: (sch: Scholarship) => void;
   onNavigateToView: (view: ViewType) => void;
   onShowToast: (title: string, description?: string, type?: 'success' | 'error' | 'info') => void;
+  onUpdatePreferences?: (prefs: AccessibilityPreferences) => void;
+  onUpdateAge?: (age: number) => void;
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -48,9 +60,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onSelectUniversity,
   onSelectScholarship,
   onNavigateToView,
-  onShowToast
+  onShowToast,
+  onUpdatePreferences,
+  onUpdateAge
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'tests' | 'favorites'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'tests' | 'favorites' | 'accessibility'>('profile');
 
   // Edit profile form state
   const [name, setName] = useState(currentUser?.name || '');
@@ -59,7 +73,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [city, setCity] = useState(currentUser?.city || '');
   const [country, setCountry] = useState(currentUser?.country || '');
   const [newPassword, setNewPassword] = useState('');
-  const [isSaving, setIsSaving] = useState(false);  if (!currentUser) {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Local accessibility preferences state
+  const [prefs, setPrefs] = useState<AccessibilityPreferences>(
+    currentUser?.accessibilityPreferences || {}
+  );
+  const [isSavingPrefs, setIsSavingPrefs] = useState(false);
+
+  if (!currentUser) {
     return (
       <div className="max-w-md mx-auto text-center p-10 bg-white/70 backdrop-blur-2xl rounded-3xl sm:rounded-[32px] border border-white/80 shadow-[0_8px_32px_rgba(180,160,220,0.12)] space-y-5">
         <div className="w-16 h-16 rounded-3xl bg-purple-100/90 backdrop-blur-sm border border-purple-200/60 text-purple-600 flex items-center justify-center mx-auto shadow-xs">
@@ -81,6 +103,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     );
   }
 
+  const currentAgeNum = Number(age) || currentUser.age || 17;
+  const ageStage = getAgeStage(currentAgeNum);
+  const stageInfo = AGE_STAGES_INFO[ageStage];
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -96,12 +122,37 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     const res = await StorageController.updateUser(currentUser.id, updatedData);
     if (res) {
       onUpdateUser(res);
-      onShowToast('Perfil actualizado en Firebase', 'Tus datos personales se han sincronizado con Firestore.', 'success');
+      if (onUpdateAge && Number(age)) {
+        onUpdateAge(Number(age));
+      }
+      onShowToast('Perfil actualizado', 'Tus datos se han guardado exitosamente.', 'success');
       setNewPassword('');
     } else {
       onShowToast('Error al actualizar', 'No se pudieron guardar los cambios en la base de datos.', 'error');
     }
     setIsSaving(false);
+  };
+
+  const togglePref = (key: keyof AccessibilityPreferences) => {
+    setPrefs(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
+  const handleSavePreferences = async () => {
+    setIsSavingPrefs(true);
+    const res = await StorageController.updateUser(currentUser.id, {
+      accessibilityPreferences: prefs
+    });
+    if (res) {
+      onUpdateUser(res);
+      if (onUpdatePreferences) {
+        onUpdatePreferences(prefs);
+      }
+      onShowToast('Ajustes guardados', 'Tus preferencias de accesibilidad han sido actualizadas.', 'success');
+    }
+    setIsSavingPrefs(false);
   };
 
   // Find saved objects
@@ -123,7 +174,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 {currentUser.name}
               </h1>
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100/90 backdrop-blur-sm border border-purple-200/60 text-purple-800 shadow-xs">
-                Estudiante
+                {stageInfo.name} ({currentAgeNum} años)
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">{currentUser.email}</p>
@@ -144,10 +195,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-white/60 backdrop-blur-xl rounded-2xl border border-white/80 shadow-xs max-w-fit">
+      <div className="flex items-center gap-2 p-1.5 bg-white/60 backdrop-blur-xl rounded-2xl border border-white/80 shadow-xs max-w-fit overflow-x-auto">
         <button
           onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
             activeTab === 'profile'
               ? 'bg-purple-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-purple-600 hover:bg-white/60'
@@ -156,8 +207,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           Datos Personales
         </button>
         <button
+          onClick={() => setActiveTab('accessibility')}
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            activeTab === 'accessibility'
+              ? 'bg-purple-600 text-white shadow-xs'
+              : 'text-slate-600 hover:text-purple-600 hover:bg-white/60'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" />
+          <span>Personalizar mi experiencia</span>
+        </button>
+        <button
           onClick={() => setActiveTab('tests')}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
             activeTab === 'tests'
               ? 'bg-purple-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-purple-600 hover:bg-white/60'
@@ -167,7 +229,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('favorites')}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
             activeTab === 'favorites'
               ? 'bg-purple-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-purple-600 hover:bg-white/60'
@@ -210,16 +272,23 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               />
             </div>
 
+            {/* MANDATORY AGE WITH EXPLANATION */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Edad</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                ¿Qué edad tienes? <span className="text-rose-500 font-bold">*</span>
+              </label>
               <input
                 type="number"
-                min={12}
+                min={8}
                 max={99}
+                required
                 value={age}
                 onChange={e => setAge(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-white/80 bg-white/75 backdrop-blur-md text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-purple-400 shadow-xs"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-purple-200 bg-white/90 text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-purple-400 shadow-xs font-bold"
               />
+              <p className="text-[11px] text-purple-700 font-medium mt-1">
+                🧒 Etapa detectada: <strong>{stageInfo.name}</strong>. Se usa exclusivamente para adaptar el vocabulario y formato de los tests a tu etapa.
+              </p>
             </div>
 
             <div>
@@ -234,6 +303,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <option value="Graduado de Bachiller / En búsqueda de carrera">Graduado de Bachiller / En búsqueda de carrera</option>
                 <option value="Estudiante Técnico / Tecnológico">Estudiante Técnico / Tecnológico</option>
                 <option value="Estudiante Universitario (Reorientación)">Estudiante Universitario (Cambio de carrera)</option>
+                <option value="Profesional en transición laboral">Profesional en transición laboral</option>
               </select>
             </div>
 
@@ -260,19 +330,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-200/50">
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Cambiar Contraseña (Opcional)
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              placeholder="Dejar en blanco para mantener la actual"
-              className="max-w-md w-full px-3.5 py-2.5 rounded-xl border border-white/80 bg-white/75 backdrop-blur-md text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-purple-400 shadow-xs placeholder-slate-400"
-            />
-          </div>
-
           <button
             type="submit"
             disabled={isSaving}
@@ -283,7 +340,170 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </form>
       )}
 
-      {/* TAB 2: TEST HISTORY */}
+      {/* TAB 2: PERSONALIZAR MI EXPERIENCIA (ACCESIBILIDAD) */}
+      {activeTab === 'accessibility' && (
+        <div className="p-6 sm:p-8 rounded-3xl sm:rounded-[32px] bg-white/75 backdrop-blur-2xl border border-white/80 shadow-[0_8px_32px_rgba(180,160,220,0.1)] space-y-6">
+          <div className="space-y-1 border-b border-slate-200/60 pb-4">
+            <h2 className="text-xl font-extrabold text-slate-900 font-['Outfit',sans-serif] flex items-center gap-2">
+              <Sliders className="w-5 h-5 text-purple-600" />
+              <span>Personaliza tu experiencia de aprendizaje y test</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Adapta la plataforma a tus necesidades visuales, cognitivas, motoras o sensoriales para responder con máxima comodidad.
+            </p>
+          </div>
+
+          {/* Preferences Checkbox Grid */}
+          <div className="space-y-5">
+            {/* Visual */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                <Eye className="w-4 h-4 text-purple-600" />
+                <span>Ajustes Visuales</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.visualLargeText}
+                    onChange={() => togglePref('visualLargeText')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Texto ampliado</strong>
+                    <span className="text-slate-500">Aumenta el tamaño de la tipografía en preguntas y opciones.</span>
+                  </div>
+                </label>
+
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.visualHighContrast}
+                    onChange={() => togglePref('visualHighContrast')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Alto contraste</strong>
+                    <span className="text-slate-500">Refuerza el contraste de colores y bordes para mayor nitidez.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Cognitive & Reading */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                <Brain className="w-4 h-4 text-indigo-600" />
+                <span>Comprensión & Enfoque</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.cognitiveOneQuestionAtATime}
+                    onChange={() => togglePref('cognitiveOneQuestionAtATime')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Una pregunta a la vez</strong>
+                    <span className="text-slate-500">Muestra una sola pregunta en pantalla para evitar sobrecarga.</span>
+                  </div>
+                </label>
+
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.cognitiveClearLanguage}
+                    onChange={() => togglePref('cognitiveClearLanguage')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Lenguaje claro y directo</strong>
+                    <span className="text-slate-500">Estructura sintáctica concisa y fácil de procesar.</span>
+                  </div>
+                </label>
+
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.readingAssistance}
+                    onChange={() => togglePref('readingAssistance')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Pistas y apoyo de lectura</strong>
+                    <span className="text-slate-500">Incluye ejemplos aclaratorios bajo cada enunciado.</span>
+                  </div>
+                </label>
+
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.timeUnlimited}
+                    onChange={() => togglePref('timeUnlimited')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Ritmo libre y pausar progreso</strong>
+                    <span className="text-slate-500">Sin cronómetros; opción de guardar y retomar cuando desees.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Motor & Sensory */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
+                <Hand className="w-4 h-4 text-emerald-600" />
+                <span>Interacción Motora y Sensorial</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.motorLargeButtons}
+                    onChange={() => togglePref('motorLargeButtons')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Botones grandes y espaciados</strong>
+                    <span className="text-slate-500">Áreas táctiles amplias para facilitar el clic o toque.</span>
+                  </div>
+                </label>
+
+                <label className="p-4 rounded-2xl bg-white border border-slate-200 flex items-start gap-3 cursor-pointer hover:border-purple-300">
+                  <input
+                    type="checkbox"
+                    checked={!!prefs.sensoryCalm}
+                    onChange={() => togglePref('sensoryCalm')}
+                    className="w-4 h-4 text-purple-600 rounded mt-0.5"
+                  />
+                  <div className="text-xs">
+                    <strong className="text-slate-900 block">Modo sensorial calmado</strong>
+                    <span className="text-slate-500">Reduce animaciones y efectos visuales intensos.</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200/60 flex items-center justify-between">
+            <span className="text-xs text-slate-500">
+              Se sincronizan automáticamente con tu perfil de VocAcción.
+            </span>
+            <button
+              onClick={handleSavePreferences}
+              disabled={isSavingPrefs}
+              className="px-6 py-3 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isSavingPrefs ? 'Guardando...' : 'Aplicar y guardar preferencias'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: TEST HISTORY */}
       {activeTab === 'tests' && (
         <div className="space-y-4">
           {(!currentUser.testHistory || currentUser.testHistory.length === 0) ? (
@@ -319,10 +539,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                 <button
                   onClick={() => onNavigateToView('results')}
-                  className="px-4 py-2.5 rounded-xl bg-purple-100/70 hover:bg-purple-200/80 text-purple-900 font-bold text-xs flex items-center gap-1.5 transition-colors shrink-0 border border-purple-200/50 shadow-xs"
+                  className="px-4 py-2 rounded-xl bg-purple-100/80 hover:bg-purple-200 text-purple-900 font-bold text-xs transition-colors shrink-0"
                 >
-                  <span>Ver Informe Completo</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  Ver Diagnóstico Completo
                 </button>
               </div>
             ))
@@ -330,35 +549,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: SAVED FAVORITES */}
+      {/* TAB 4: FAVORITES */}
       {activeTab === 'favorites' && (
         <div className="space-y-6">
           {/* Saved Careers */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <div className="p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-3">
+            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-purple-600" />
               <span>Carreras Guardadas ({savedCareerList.length})</span>
             </h3>
-
             {savedCareerList.length === 0 ? (
-              <p className="text-xs text-slate-500 bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white/80 shadow-xs">
-                No tienes carreras guardadas aún. Explora el catálogo y pulsa el icono de corazón en las que te interesen.
-              </p>
+              <p className="text-xs text-slate-500">No has guardado carreras aún.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {savedCareerList.map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => onSelectCareer(c)}
-                    className="p-4 rounded-2xl bg-white/65 backdrop-blur-xl border border-white/70 hover:border-purple-300 hover:bg-white/85 transition-all cursor-pointer shadow-xs flex flex-col justify-between space-y-2"
-                  >
+                  <div key={c.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between">
                     <div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100/80 text-purple-700">
-                        {c.area}
-                      </span>
-                      <h4 className="text-xs sm:text-sm font-bold text-slate-900 mt-1">{c.name}</h4>
+                      <h4 className="font-bold text-xs text-slate-900">{c.name}</h4>
+                      <p className="text-[11px] text-slate-500">{c.duration} • {c.area}</p>
                     </div>
-                    <p className="text-[11px] font-semibold text-purple-600">Ver ficha →</p>
+                    <button
+                      onClick={() => onSelectCareer(c)}
+                      className="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 font-bold text-xs hover:bg-purple-100"
+                    >
+                      Ver
+                    </button>
                   </div>
                 ))}
               </div>
@@ -366,29 +581,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           {/* Saved Universities */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+          <div className="p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-3">
+            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
               <Building2 className="w-4 h-4 text-indigo-600" />
               <span>Universidades Guardadas ({savedUniList.length})</span>
             </h3>
-
             {savedUniList.length === 0 ? (
-              <p className="text-xs text-slate-500 bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white/80 shadow-xs">
-                No tienes universidades guardadas en tu lista.
-              </p>
+              <p className="text-xs text-slate-500">No has guardado universidades aún.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {savedUniList.map(u => (
-                  <div
-                    key={u.id}
-                    onClick={() => onSelectUniversity(u)}
-                    className="p-4 rounded-2xl bg-white/65 backdrop-blur-xl border border-white/70 hover:border-purple-300 hover:bg-white/85 transition-all cursor-pointer shadow-xs space-y-1"
-                  >
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100/80 text-slate-700">
-                      {u.type}
-                    </span>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">{u.name}</h4>
-                    <p className="text-[11px] text-slate-500">{u.city}</p>
+                  <div key={u.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900">{u.name}</h4>
+                      <p className="text-[11px] text-slate-500">{u.city} • {u.type === 'public' ? 'Pública' : 'Privada'}</p>
+                    </div>
+                    <button
+                      onClick={() => onSelectUniversity(u)}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-xs hover:bg-indigo-100"
+                    >
+                      Ver
+                    </button>
                   </div>
                 ))}
               </div>
@@ -396,29 +609,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           {/* Saved Scholarships */}
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <Award className="w-4 h-4 text-amber-600" />
-              <span>Becas de Interés ({savedSchList.length})</span>
+          <div className="p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-3">
+            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+              <Award className="w-4 h-4 text-pink-600" />
+              <span>Becas Guardadas ({savedSchList.length})</span>
             </h3>
-
             {savedSchList.length === 0 ? (
-              <p className="text-xs text-slate-500 bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white/80 shadow-xs">
-                No tienes becas guardadas en tu lista.
-              </p>
+              <p className="text-xs text-slate-500">No has guardado becas aún.</p>
             ) : (
-              <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {savedSchList.map(s => (
-                  <div
-                    key={s.id}
-                    onClick={() => onSelectScholarship(s)}
-                    className="p-4 rounded-2xl bg-white/65 backdrop-blur-xl border border-white/70 hover:border-amber-300 hover:bg-white/85 transition-all cursor-pointer shadow-xs space-y-1"
-                  >
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800">
-                      {s.coverage}
-                    </span>
-                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">{s.title}</h4>
-                    <p className="text-[11px] text-purple-700">{s.organization}</p>
+                  <div key={s.id} className="p-4 rounded-2xl bg-white border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs text-slate-900">{s.title}</h4>
+                      <p className="text-[11px] text-slate-500">{s.provider} • {s.coverage}</p>
+                    </div>
+                    <button
+                      onClick={() => onSelectScholarship(s)}
+                      className="px-3 py-1.5 rounded-xl bg-pink-50 text-pink-700 font-bold text-xs hover:bg-pink-100"
+                    >
+                      Ver
+                    </button>
                   </div>
                 ))}
               </div>

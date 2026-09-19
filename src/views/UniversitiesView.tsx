@@ -163,7 +163,7 @@ export const UniversitiesView: React.FC<UniversitiesViewProps> = ({
                       Carreras destacadas:
                     </p>
                     <div className="flex flex-wrap gap-1">
-                      {uni.topCareers.slice(0, 3).map((c, idx) => (
+                      {(uni.topCareers || []).slice(0, 3).map((c, idx) => (
                         <span
                           key={idx}
                           onClick={() => onNavigateToCareers(c)}

@@ -5,6 +5,7 @@ import { Career } from '../types';
  * Incluye perfil del aspirante, campo laboral, asignaturas clave, duración oficial y perfiles RIASEC.
  */
 import { OFFICIAL_COLOMBIAN_PROGRAMS } from './careersCatalog';
+import { CREATIVE_AND_TECHNICAL_CAREERS } from './creativeAndTechnicalCareers';
 
 export const ORIGINAL_CORE_CAREERS: Career[] = [
   // --- INGENIERÍAS Y TECNOLOGÍA ---
@@ -1068,5 +1069,6 @@ export const ORIGINAL_CORE_CAREERS: Career[] = [
  */
 export const COMPREHENSIVE_CAREERS_DATA: Career[] = [
   ...ORIGINAL_CORE_CAREERS,
+  ...CREATIVE_AND_TECHNICAL_CAREERS,
   ...OFFICIAL_COLOMBIAN_PROGRAMS
 ];

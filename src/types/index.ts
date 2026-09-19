@@ -6,14 +6,49 @@ export type ViewType =
   | 'universities'
   | 'scholarships'
   | 'profile'
-  | 'compare';
+  | 'compare'
+  | 'admin';
 
 export type AuthMode = 'login' | 'register' | 'forgot-password';
+
+export type AgeStage = 'infancia' | 'adolescencia' | 'juventud' | 'adultez';
+
+export function getAgeStage(age?: number): AgeStage {
+  if (age === undefined || age === null || Number.isNaN(age)) return 'adolescencia';
+  if (age <= 12) return 'infancia';
+  if (age <= 17) return 'adolescencia';
+  if (age <= 25) return 'juventud';
+  return 'adultez';
+}
+
+export interface AccessibilityPreferences {
+  visualLargeText?: boolean;
+  visualHighContrast?: boolean;
+  visualAccessibleFont?: boolean;
+  visualReducedSimultaneous?: boolean;
+  visualScreenReader?: boolean;
+  auditoryTextFallback?: boolean;
+  motorLargeButtons?: boolean;
+  motorKeyboardNav?: boolean;
+  cognitiveClearLanguage?: boolean;
+  cognitiveOneQuestionAtATime?: boolean;
+  readingAssistance?: boolean;
+  sensoryCalm?: boolean;
+  timeUnlimited?: boolean;
+}
+
+export type TestCategoryId = 
+  | 'estudiantes'
+  | 'exploracion'
+  | 'perfil-profesional'
+  | 'intereses-habilidades'
+  | 'reorientacion';
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  role?: 'admin' | 'user';
   password?: string;
   age?: number;
   educationLevel?: string;
@@ -26,6 +61,7 @@ export interface User {
   savedScholarships: string[];
   testHistory: TestResult[];
   answeredQuestionIds?: number[];
+  accessibilityPreferences?: AccessibilityPreferences;
 }
 
 export type AdviceCategory = 
@@ -123,8 +159,8 @@ export interface Career {
     modality?: string;
   }[];
   universityOfferings?: CareerUniversityOffering[];
-  degreeType: 'Licenciatura' | 'Ingeniería' | 'Tecnología' | 'Medicina' | 'Especialidad' | 'Profesional Universitario' | 'Técnico Profesional' | 'Técnico' | 'Ciencias' | 'Administración' | 'Artes y Humanidades';
-  level?: 'Profesional Universitario' | 'Tecnológico' | 'Técnico Profesional' | 'Especialización' | 'Maestría';
+  degreeType: 'Licenciatura' | 'Ingeniería' | 'Tecnología' | 'Medicina' | 'Especialidad' | 'Profesional Universitario' | 'Técnico Profesional' | 'Técnico' | 'Ciencias' | 'Administración' | 'Artes y Humanidades' | string;
+  level?: 'Profesional Universitario' | 'Tecnológico' | 'Técnico Profesional' | 'Especialización' | 'Maestría' | string;
   modality?: 'Presencial' | 'Virtual' | 'A distancia' | 'Dual / Híbrida';
   sniesCode?: string;
   department?: string;

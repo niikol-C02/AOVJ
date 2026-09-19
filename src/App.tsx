@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { AuthMode, Career, Scholarship, TestResult, University, User, ViewType } from './types';
+import { AccessibilityPreferences, AuthMode, Career, Scholarship, TestResult, University, User, ViewType } from './types';
 import { StorageController } from './controllers/StorageController';
 import { CAREERS_DATA, UNIVERSITIES_DATA, SCHOLARSHIPS_DATA } from './models/data';
 
@@ -28,6 +28,7 @@ import { CareersView } from './views/CareersView';
 import { UniversitiesView } from './views/UniversitiesView';
 import { ScholarshipsView } from './views/ScholarshipsView';
 import { ProfileView } from './views/ProfileView';
+import { AdminDashboardView } from './views/AdminDashboardView';
 
 export default function App() {
   // Navigation
@@ -109,6 +110,51 @@ export default function App() {
     setCurrentUser(null);
     showToast('Sesión cerrada', 'Has salido de tu cuenta de VocAcción.', 'info');
     setCurrentView('home');
+  };
+
+  // Accessibility Preferences
+  const [accessibilityPreferences, setAccessibilityPreferences] = useState<AccessibilityPreferences>(
+    currentUser?.accessibilityPreferences || {}
+  );
+
+  useEffect(() => {
+    if (currentUser?.accessibilityPreferences) {
+      setAccessibilityPreferences(currentUser.accessibilityPreferences);
+    }
+  }, [currentUser?.accessibilityPreferences]);
+
+  // Guard for Admin Dashboard
+  useEffect(() => {
+    if (currentView === 'admin') {
+      if (!currentUser || currentUser.role !== 'admin') {
+        showToast('Acceso Denegado (403)', 'Esta área requiere privilegios de administrador autorizados.', 'error');
+        setCurrentView('home');
+      }
+    }
+  }, [currentView, currentUser]);
+
+  const handleUpdateAccessibilityPreferences = async (newPrefs: AccessibilityPreferences) => {
+    setAccessibilityPreferences(newPrefs);
+    if (currentUser) {
+      const updated = await StorageController.updateUser(currentUser.id, {
+        accessibilityPreferences: newPrefs
+      });
+      if (updated) {
+        setCurrentUser(updated);
+      }
+    }
+  };
+
+  const handleUpdateUserAge = async (newAge: number) => {
+    if (currentUser) {
+      const updated = await StorageController.updateUser(currentUser.id, {
+        age: newAge
+      });
+      if (updated) {
+        setCurrentUser(updated);
+        showToast('Edad actualizada', `Tu experiencia vocacional ahora se adapta para los ${newAge} años.`, 'success');
+      }
+    }
   };
 
   // Test completed handler
@@ -299,6 +345,9 @@ export default function App() {
             currentUser={currentUser}
             onCompleteTest={handleCompleteTest}
             onShowToast={showToast}
+            accessibilityPreferences={currentUser?.accessibilityPreferences || accessibilityPreferences}
+            onUpdateAccessibilityPreferences={handleUpdateAccessibilityPreferences}
+            onUpdateUserAge={handleUpdateUserAge}
           />
         )}
 
@@ -363,6 +412,8 @@ export default function App() {
             onSelectScholarship={setSelectedScholarship}
             onNavigateToView={setCurrentView}
             onShowToast={showToast}
+            onUpdatePreferences={handleUpdateAccessibilityPreferences}
+            onUpdateAge={handleUpdateUserAge}
           />
         )}
 
@@ -379,6 +430,14 @@ export default function App() {
               latestTestResult={latestTestResult}
             />
           </div>
+        )}
+
+        {currentView === 'admin' && currentUser?.role === 'admin' && (
+          <AdminDashboardView
+            currentUser={currentUser}
+            onNavigate={setCurrentView}
+            onShowToast={showToast}
+          />
         )}
       </main>
 
@@ -425,7 +484,7 @@ export default function App() {
         onNavigateToView={setCurrentView}
         matchScore={
           selectedCareer
-            ? latestTestResult?.recommendedCareers.find(rc => rc.careerId === selectedCareer.id)?.matchPercentage
+            ? latestTestResult?.recommendedCareers?.find(rc => rc.careerId === selectedCareer.id)?.matchPercentage
             : undefined
         }
       />

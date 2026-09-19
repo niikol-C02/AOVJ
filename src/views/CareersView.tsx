@@ -70,8 +70,8 @@ export const CareersView: React.FC<CareersViewProps> = ({
       })
       .sort((a, b) => {
         if (sortBy === 'match') {
-          const matchA = latestTestResult?.recommendedCareers.find(rc => rc.careerId === a.id)?.matchPercentage || 50;
-          const matchB = latestTestResult?.recommendedCareers.find(rc => rc.careerId === b.id)?.matchPercentage || 50;
+          const matchA = latestTestResult?.recommendedCareers?.find(rc => rc.careerId === a.id)?.matchPercentage || 50;
+          const matchB = latestTestResult?.recommendedCareers?.find(rc => rc.careerId === b.id)?.matchPercentage || 50;
           return matchB - matchA;
         }
         if (sortBy === 'employability') {
@@ -203,7 +203,7 @@ export const CareersView: React.FC<CareersViewProps> = ({
             {visibleCareers.map(career => {
               const isSaved = savedCareers.includes(career.id);
               const isCompared = comparedCareers.includes(career.id);
-              const matchObj = latestTestResult?.recommendedCareers.find(rc => rc.careerId === career.id);
+              const matchObj = latestTestResult?.recommendedCareers?.find(rc => rc.careerId === career.id);
 
               return (
                 <div
@@ -268,7 +268,7 @@ export const CareersView: React.FC<CareersViewProps> = ({
                           {career.citiesOffered && career.citiesOffered.length > 0 && (
                             <div className="flex items-center gap-1 text-[10px] text-slate-600 font-medium pt-0.5">
                               <Compass className="w-3 h-3 text-purple-500 shrink-0" />
-                              <span className="truncate">Sedes: {career.citiesOffered.slice(0, 3).join(', ')}{career.citiesOffered.length > 3 ? ` +${career.citiesOffered.length - 3}` : ''}</span>
+                              <span className="truncate">Sedes: {(career.citiesOffered || []).slice(0, 3).join(', ')}{(career.citiesOffered || []).length > 3 ? ` +${(career.citiesOffered || []).length - 3}` : ''}</span>
                             </div>
                           )}
                         </div>
@@ -277,7 +277,7 @@ export const CareersView: React.FC<CareersViewProps> = ({
 
                     {/* Skills tags preview */}
                     <div className="flex flex-wrap gap-1 pt-1">
-                      {career.necessarySkills.slice(0, 2).map((sk, idx) => (
+                      {(career.necessarySkills || []).slice(0, 2).map((sk, idx) => (
                         <span
                           key={idx}
                           className="px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-purple-900 text-[10px] font-medium"

@@ -14,7 +14,9 @@ import {
   Layers, 
   Menu, 
   X,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck,
+  ArrowLeft
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -138,6 +140,25 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
+            {/* Admin Dual Mode Quick Toggle Button */}
+            {currentUser?.role === 'admin' && (
+              <button
+                id="admin-mode-toggle-btn"
+                onClick={() => handleNavClick(currentView === 'admin' ? 'home' : 'admin')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl text-xs font-bold transition-all shadow-xs border ${
+                  currentView === 'admin'
+                    ? 'bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white border-purple-500/60 ring-2 ring-purple-400/30'
+                    : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-200'
+                }`}
+                title={currentView === 'admin' ? 'Alternar a Vista Estudiante' : 'Acceder al Panel de Administración'}
+              >
+                <ShieldCheck className={`w-4 h-4 ${currentView === 'admin' ? 'text-pink-300' : 'text-purple-600'}`} />
+                <span className="hidden md:inline">
+                  {currentView === 'admin' ? 'Vista Estudiante' : 'Panel Admin'}
+                </span>
+              </button>
+            )}
+
             {/* User Session Controller */}
             {currentUser ? (
               <div className="relative">
@@ -153,7 +174,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <p className="text-xs font-bold text-slate-800 leading-none">
                       {currentUser.name.split(' ')[0]}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Estudiante</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      {currentUser.role === 'admin' ? 'Administrador' : 'Estudiante'}
+                    </p>
                   </div>
                   <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
                 </button>
@@ -167,9 +190,34 @@ export const Navbar: React.FC<NavbarProps> = ({
                     />
                     <div className="absolute right-0 mt-2 w-56 bg-white/90 backdrop-blur-2xl rounded-2xl shadow-xl border border-white/80 p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
                       <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                        <p className="text-xs font-bold text-slate-900">{currentUser.name}</p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-slate-900">{currentUser.name}</p>
+                          {currentUser.role === 'admin' && (
+                            <span className="px-1.5 py-0.2 rounded-sm text-[9px] font-bold bg-purple-100 text-purple-800 uppercase tracking-wider">
+                              Admin
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
                       </div>
+
+                      {currentUser.role === 'admin' && (
+                        <>
+                          <button
+                            id="user-menu-admin-toggle-btn"
+                            onClick={() => {
+                              handleNavClick(currentView === 'admin' ? 'home' : 'admin');
+                              setUserDropdownOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-purple-900 hover:bg-purple-50/80 rounded-xl transition-colors text-left"
+                          >
+                            <ShieldCheck className="w-4 h-4 text-purple-600" />
+                            <span>{currentView === 'admin' ? 'Modo Estudiante' : 'Panel de Administración'}</span>
+                          </button>
+                          <div className="my-1 border-t border-slate-100" />
+                        </>
+                      )}
+
                       <button
                         id="user-menu-profile-btn"
                         onClick={() => {
@@ -272,6 +320,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Layers className="w-5 h-5 text-pink-500" />
             <span>Comparador de Carreras</span>
           </button>
+
+          {currentUser?.role === 'admin' && (
+            <button
+              id="mobile-nav-admin-btn"
+              onClick={() => handleNavClick(currentView === 'admin' ? 'home' : 'admin')}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-purple-900 bg-purple-100/90 border border-purple-200 mt-2"
+            >
+              <ShieldCheck className="w-5 h-5 text-purple-700" />
+              <span>{currentView === 'admin' ? 'Volver a Modo Estudiante' : 'Panel de Administración'}</span>
+            </button>
+          )}
         </div>
       )}
     </header>
