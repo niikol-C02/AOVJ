@@ -45,10 +45,20 @@ interface TestViewProps {
   onUpdateAccessibilityPreferences?: (prefs: AccessibilityPreferences) => void;
   onUpdateUserAge?: (age: number) => void;
   initialCategoryId?: TestCategoryId;
-  initialScreen?: 'categories' | 'category-tests' | 'pre-test' | 'active-test';
+  initialScreen?: 'tests-list' | 'pre-test' | 'active-test';
 }
 
 type ScaleMode = 'standard' | 'enthusiasm' | 'simple';
+
+const FILTER_TABS = [
+  { id: 'all', label: 'Todos' },
+  { id: 'intereses', label: 'Intereses' },
+  { id: 'habilidades', label: 'Habilidades' },
+  { id: 'personalidad', label: 'Personalidad' },
+  { id: 'areas-profesionales', label: 'Áreas profesionales' },
+  { id: 'preferencias-academicas', label: 'Preferencias académicas' },
+  { id: 'orientacion-vocacional', label: 'Orientación vocacional' }
+];
 
 export const TestView: React.FC<TestViewProps> = ({ 
   currentUser, 
@@ -58,14 +68,16 @@ export const TestView: React.FC<TestViewProps> = ({
   onUpdateAccessibilityPreferences,
   onUpdateUserAge,
   initialCategoryId = 'orientacion-vocacional',
-  initialScreen = 'categories'
+  initialScreen = 'tests-list'
 }) => {
   // Screens:
-  // 1. 'categories': Grid of 6 categories "¿Qué quieres conocer sobre ti?"
-  // 2. 'category-tests': Tests available within the selected category
-  // 3. 'pre-test': Information card for the chosen test before starting
-  // 4. 'active-test': Questions in progress
-  const [currentScreen, setCurrentScreen] = useState<'categories' | 'category-tests' | 'pre-test' | 'active-test'>(initialScreen);
+  // 1. 'tests-list': Directory of all tests with filter tabs (Todos, Intereses, Habilidades, etc.)
+  // 2. 'pre-test': Information card for the chosen test before starting
+  // 3. 'active-test': Questions in progress
+  const [currentScreen, setCurrentScreen] = useState<'tests-list' | 'pre-test' | 'active-test'>(
+    initialScreen === 'tests-list' || initialScreen === 'pre-test' || initialScreen === 'active-test' ? initialScreen : 'tests-list'
+  );
+  const [selectedFilterTab, setSelectedFilterTab] = useState<string>('all');
   const [selectedCategoryId, setSelectedCategoryId] = useState<TestCategoryId>(initialCategoryId);
   const [selectedTestId, setSelectedTestId] = useState<string>('test-riasec-integral');
   const [scaleMode, setScaleMode] = useState<ScaleMode>('standard');
@@ -74,7 +86,7 @@ export const TestView: React.FC<TestViewProps> = ({
 
   useEffect(() => {
     if (initialScreen) {
-      setCurrentScreen(initialScreen);
+      setCurrentScreen(initialScreen === 'tests-list' || initialScreen === 'pre-test' || initialScreen === 'active-test' ? initialScreen : 'tests-list');
     }
   }, [initialScreen]);
 
@@ -113,6 +125,19 @@ export const TestView: React.FC<TestViewProps> = ({
     }
     return categoryInfo.availableTests[0];
   }, [selectedTestId, categoryInfo]);
+
+  // All tests across all categories
+  const allTests: TestDefinition[] = useMemo(() => {
+    return TEST_CATEGORIES_DATA.flatMap(c => c.availableTests);
+  }, []);
+
+  // Filtered tests based on tab selected
+  const displayedTests = useMemo(() => {
+    if (selectedFilterTab === 'all') {
+      return allTests;
+    }
+    return allTests.filter(t => t.categoryId === selectedFilterTab);
+  }, [selectedFilterTab, allTests]);
 
   // Questions tailored by category, age stage, and specific test
   const questions: Question[] = useMemo(() => {
@@ -155,11 +180,6 @@ export const TestView: React.FC<TestViewProps> = ({
   };
 
   // Navigation handlers
-  const handleOpenCategory = (catId: TestCategoryId) => {
-    setSelectedCategoryId(catId);
-    setCurrentScreen('category-tests');
-  };
-
   const handleSelectTest = (test: TestDefinition) => {
     setSelectedTestId(test.id);
     setSelectedCategoryId(test.categoryId);
@@ -300,118 +320,64 @@ export const TestView: React.FC<TestViewProps> = ({
       </section>
 
       {/* ========================================================================= */}
-      {/* 1. PANTALLA: CATEGORÍAS (”¿Qué quieres conocer sobre ti?”)               */}
+      {/* 1. PANTALLA: TESTS CON FILTROS POR CATEGORÍA                              */}
       {/* ========================================================================= */}
-      {currentScreen === 'categories' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
+      {currentScreen === 'tests-list' && (
+        <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-200">
+          {/* Header */}
           <div className="text-center max-w-2xl mx-auto space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-pink-100/80 text-pink-700 text-xs font-bold border border-pink-200 shadow-xs">
               <Sparkles className="w-3.5 h-3.5 text-pink-600" />
-              <span>Exploración Vocacional Guiada</span>
+              <span>Orientación Vocacional Interactiva</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight font-['Outfit',sans-serif]">
-              ¿Qué quieres conocer sobre ti?
+              TESTS
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              Selecciona el tipo de orientación que deseas explorar hoy. Puedes realizar varios test para tener una visión más rica y completa de tu futuro.
+              Encuentra el test que más te ayude a conocerte.
             </p>
           </div>
 
-          {/* Grid of the 6 Clear Categories */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
-            {TEST_CATEGORIES_DATA.map(cat => {
-              const testCount = cat.availableTests.length;
+          {/* Filter Tabs / Pestañas de categorías dentro de Tests */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none sm:flex-wrap justify-start sm:justify-center">
+            {FILTER_TABS.map(tab => {
+              const isActive = selectedFilterTab === tab.id;
               return (
-                <div
-                  key={cat.id}
-                  id={`cat-card-${cat.id}`}
-                  onClick={() => handleOpenCategory(cat.id)}
-                  className={`p-6 rounded-3xl bg-white/70 backdrop-blur-xl border ${cat.borderColor} hover:bg-white hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-5 cursor-pointer group shadow-xs`}
+                <button
+                  key={tab.id}
+                  id={`filter-tab-${tab.id}`}
+                  onClick={() => setSelectedFilterTab(tab.id)}
+                  className={`px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shadow-xs ${
+                    isActive
+                      ? 'bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20'
+                      : 'bg-white/80 hover:bg-white text-slate-700 border border-slate-200/80 hover:border-purple-300'
+                  }`}
                 >
-                  <div className="space-y-3.5">
-                    <div className="flex items-center justify-between">
-                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${cat.colorGradient} text-white flex items-center justify-center shadow-md shadow-purple-500/10 group-hover:scale-105 transition-transform`}>
-                        {cat.id === 'intereses' && <Sparkles className="w-6 h-6" />}
-                        {cat.id === 'habilidades' && <Brain className="w-6 h-6" />}
-                        {cat.id === 'personalidad' && <UserCheck className="w-6 h-6" />}
-                        {cat.id === 'areas-profesionales' && <Briefcase className="w-6 h-6" />}
-                        {cat.id === 'preferencias-academicas' && <BookOpen className="w-6 h-6" />}
-                        {cat.id === 'orientacion-vocacional' && <Compass className="w-6 h-6" />}
-                      </div>
-                      <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                        {testCount} test{testCount > 1 ? 's' : ''} disponible{testCount > 1 ? 's' : ''}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-600">
-                        {cat.badge}
-                      </span>
-                      <h2 className="text-lg font-extrabold text-slate-900 group-hover:text-purple-600 transition-colors mt-0.5">
-                        {cat.title}
-                      </h2>
-                    </div>
-
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {cat.description}
-                    </p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-purple-700">
-                    <span>Ver tests disponibles</span>
-                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
+                  {tab.label}
+                </button>
               );
             })}
           </div>
-        </div>
-      )}
 
-      {/* ========================================================================= */}
-      {/* 2. PANTALLA: TESTS DISPONIBLES EN LA CATEGORÍA                          */}
-      {/* ========================================================================= */}
-      {currentScreen === 'category-tests' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentScreen('categories')}
-              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-1 transition-colors shadow-xs"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Volver a Categorías</span>
-            </button>
-            <span className="text-xs text-slate-400">/</span>
-            <span className="text-xs font-bold text-purple-800">{categoryInfo.title}</span>
-          </div>
-
-          <div className="p-6 sm:p-8 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-3">
-            <span className="text-xs font-bold text-purple-600 uppercase tracking-wider">
-              Categoría seleccionada
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-['Outfit',sans-serif]">
-              {categoryInfo.title}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 max-w-3xl leading-relaxed">
-              {categoryInfo.description} {categoryInfo.whatYouWillDiscover}
-            </p>
-          </div>
-
+          {/* Tests List Grid */}
           <div className="space-y-3">
-            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
-              Tests disponibles en esta categoría ({categoryInfo.availableTests.length})
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {categoryInfo.availableTests.map(test => (
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
+              <span>
+                Mostrando {displayedTests.length} test{displayedTests.length !== 1 ? 's' : ''} {selectedFilterTab !== 'all' ? `de ${FILTER_TABS.find(t => t.id === selectedFilterTab)?.label}` : 'disponibles'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {displayedTests.map(test => (
                 <div
                   key={test.id}
+                  id={`test-card-${test.id}`}
                   className="p-5 sm:p-6 rounded-3xl bg-white/80 backdrop-blur-xl border border-slate-200/80 hover:border-purple-300 hover:shadow-lg transition-all flex flex-col justify-between space-y-4 shadow-2xs group"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
-                        {test.badge}
+                        {test.categoryName}
                       </span>
                       <span className="text-xs font-bold text-slate-500 flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-purple-500" />
@@ -419,16 +385,18 @@ export const TestView: React.FC<TestViewProps> = ({
                       </span>
                     </div>
 
-                    <h4 className="text-base sm:text-lg font-extrabold text-slate-900 group-hover:text-purple-600 transition-colors">
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 group-hover:text-purple-600 transition-colors">
                       {test.name}
-                    </h4>
+                    </h3>
 
                     <p className="text-xs text-slate-600 leading-relaxed">
                       {test.shortDescription}
                     </p>
 
                     <div className="p-3 rounded-2xl bg-purple-50/70 border border-purple-100 text-xs text-purple-950 space-y-1">
-                      <span className="font-bold block text-[11px] uppercase tracking-wide text-purple-700">¿Para qué sirve?</span>
+                      <span className="font-bold block text-[11px] uppercase tracking-wide text-purple-700">
+                        ¿Para qué sirve?
+                      </span>
                       <p className="text-[11px] text-slate-600 leading-relaxed">
                         {test.whatItIsFor}
                       </p>
@@ -441,10 +409,11 @@ export const TestView: React.FC<TestViewProps> = ({
                     </div>
 
                     <button
+                      id={`btn-select-test-${test.id}`}
                       onClick={() => handleSelectTest(test)}
-                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs"
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs"
                     >
-                      <span>Ver detalles y comenzar</span>
+                      <span>Comenzar test</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -456,20 +425,20 @@ export const TestView: React.FC<TestViewProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* 3. PANTALLA: INFORMACIÓN DETALLADA DEL TEST (PRE-TEST)                   */}
+      {/* 2. PANTALLA: INFORMACIÓN DETALLADA DEL TEST (PRE-TEST)                   */}
       {/* ========================================================================= */}
       {currentScreen === 'pre-test' && (
         <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentScreen('category-tests')}
+              onClick={() => setCurrentScreen('tests-list')}
               className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 flex items-center gap-1 transition-colors shadow-xs"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Volver a Tests</span>
             </button>
             <span className="text-xs text-slate-400">/</span>
-            <span className="text-xs text-slate-600">{categoryInfo.title}</span>
+            <span className="text-xs font-bold text-purple-800">{activeTestDef.categoryName}</span>
           </div>
 
           <div className="p-6 sm:p-8 rounded-3xl sm:rounded-[36px] bg-white/85 backdrop-blur-2xl border border-white/80 shadow-xl shadow-purple-500/5 space-y-6">
@@ -554,7 +523,7 @@ export const TestView: React.FC<TestViewProps> = ({
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setCurrentScreen('category-tests')}
+                onClick={() => setCurrentScreen('tests-list')}
                 className="w-full sm:w-auto py-3.5 px-5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors text-center"
               >
                 Elegir otro test

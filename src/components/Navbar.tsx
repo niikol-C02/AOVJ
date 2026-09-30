@@ -44,9 +44,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems: { id: ViewType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'home', label: 'Inicio', icon: Compass },
-    { id: 'test', label: 'Test', icon: Sparkles },
-    { id: 'categories', label: 'Categorías', icon: Layers },
+    { id: 'test', label: 'Tests', icon: Sparkles },
     { id: 'careers', label: 'Carreras', icon: BookOpen },
+    { id: 'universities', label: 'Universidades', icon: Building2 },
+    { id: 'scholarships', label: 'Becas', icon: Award },
     { id: 'results', label: 'Resultados', icon: BarChart3 },
     { id: 'profile', label: 'Mi Perfil', icon: UserIcon }
   ];

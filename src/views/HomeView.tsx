@@ -284,10 +284,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </p>
           </div>
           <button
-            onClick={() => onNavigate('categories')}
+            onClick={() => onNavigate('test')}
             className="text-xs sm:text-sm font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 self-start sm:self-auto"
           >
-            <span>Ver todas las categorías</span>
+            <span>Ver todos los tests</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
@@ -297,6 +297,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             const getIcon = () => {
               switch (category.id) {
                 case 'intereses': return <Sparkles className="w-5 h-5 text-amber-500" />;
+                case 'habilidades':
                 case 'habilidades-aptitudes': return <Brain className="w-5 h-5 text-emerald-500" />;
                 case 'personalidad': return <UserCheck className="w-5 h-5 text-pink-500" />;
                 case 'areas-profesionales': return <Briefcase className="w-5 h-5 text-blue-500" />;
@@ -309,7 +310,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             return (
               <div
                 key={category.id}
-                onClick={() => onNavigate('categories')}
+                onClick={() => onNavigate('test')}
                 className="p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 hover:border-purple-300 hover:bg-white/90 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between space-y-3 shadow-xs group"
               >
                 <div className="space-y-2">

@@ -349,7 +349,7 @@ export default function App() {
             accessibilityPreferences={currentUser?.accessibilityPreferences || accessibilityPreferences}
             onUpdateAccessibilityPreferences={handleUpdateAccessibilityPreferences}
             onUpdateUserAge={handleUpdateUserAge}
-            initialScreen="categories"
+            initialScreen="tests-list"
           />
         )}
 
