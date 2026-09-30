@@ -65,16 +65,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div 
             id="brand-logo-btn"
             onClick={() => handleNavClick('home')}
-            className="flex items-center gap-3 cursor-pointer group select-none"
+            className="flex items-center gap-2 sm:gap-3 cursor-pointer group select-none min-w-0"
           >
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-pink-400 via-purple-500 to-indigo-500 p-0.5 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform backdrop-blur-md">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-pink-400 via-purple-500 to-indigo-500 p-0.5 shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform backdrop-blur-md shrink-0">
               <div className="w-full h-full bg-white/90 backdrop-blur-xs rounded-[14px] flex items-center justify-center text-purple-600">
                 <Compass className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:rotate-45" />
               </div>
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="font-['Outfit',sans-serif] font-extrabold text-xl sm:text-2xl tracking-tight bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
+                <span className="font-['Outfit',sans-serif] font-extrabold text-lg sm:text-2xl tracking-tight bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent truncate">
                   VocAcción
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 backdrop-blur-sm border border-pink-200/80 text-pink-700 uppercase tracking-wider hidden sm:inline-block shadow-xs">
@@ -111,14 +111,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Right actions: Compare, Favorites, User Profile / Auth */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {/* Accessibility / Personalizar experiencia quick button */}
             {onOpenAccessibility && (
               <button
                 id="navbar-a11y-btn"
                 onClick={onOpenAccessibility}
                 title="Personalizar mi experiencia (Accesibilidad y adaptaciones)"
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200/80 transition-all flex items-center gap-1.5 shadow-xs text-xs font-bold"
+                className="hidden md:flex px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200/80 transition-all items-center gap-1.5 shadow-xs text-xs font-bold"
               >
                 <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                 <span className="hidden xl:inline">Personalizar</span>
@@ -273,11 +273,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   id="nav-login-btn"
                   onClick={() => onOpenAuth('login')}
-                  className="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:text-purple-700 hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-white/60 transition-all flex items-center gap-1.5"
+                  className="px-2.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 hover:text-purple-700 hover:bg-white/60 backdrop-blur-sm border border-transparent hover:border-white/60 transition-all flex items-center gap-1.5"
                 >
                   <LogIn className="w-4 h-4 text-purple-600" />
                   <span className="hidden sm:inline">Ingresar</span>
@@ -285,10 +285,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   id="nav-register-btn"
                   onClick={() => onOpenAuth('register')}
-                  className="px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-sm hover:shadow-md hover:opacity-95 backdrop-blur-md border border-white/30 transition-all flex items-center gap-1.5"
+                  className="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 text-white shadow-sm hover:shadow-md hover:opacity-95 backdrop-blur-md border border-white/30 transition-all flex items-center gap-1.5 shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Crear Cuenta</span>
+                  <span className="hidden min-[380px]:inline">Crear Cuenta</span>
+                  <span className="inline min-[380px]:hidden">Registro</span>
                 </button>
               </div>
             )}

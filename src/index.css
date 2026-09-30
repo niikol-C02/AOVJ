@@ -1,11 +1,32 @@
 @import "tailwindcss";
 
 @layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
   html, body {
     overflow-x: hidden;
     width: 100%;
     max-width: 100%;
     -webkit-text-size-adjust: 100%;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  p, h1, h2, h3, h4, h5, h6, span, a, label {
+    overflow-wrap: break-word;
+  }
+
+  img, svg, video, canvas, audio, iframe, embed, object {
+    max-width: 100%;
   }
 
   body {
