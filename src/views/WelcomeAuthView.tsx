@@ -45,7 +45,6 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
 
   // UI state
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -54,30 +53,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
     setSuccessMsg('');
   };
 
-  // 1. Google Authentication
-  const handleGoogleLogin = async () => {
-    clearMessages();
-    setIsGoogleLoading(true);
-    try {
-      const result = await StorageController.loginWithGoogle();
-      if (result.user) {
-        onShowToast(
-          `¡Bienvenido, ${result.user.name.split(' ')[0]}!`,
-          'Has iniciado sesión con tu cuenta de Google.',
-          'success'
-        );
-        onAuthSuccess(result.user);
-      } else {
-        setErrorMsg(result.error || 'No se pudo iniciar sesión con Google.');
-      }
-    } catch (err: any) {
-      setErrorMsg(err?.message || 'Error inesperado al conectar con Google.');
-    } finally {
-      setIsGoogleLoading(false);
-    }
-  };
-
-  // 2. Email & Password Login
+  // 1. Email & Password Login
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     clearMessages();
@@ -202,7 +178,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
   // Optional Demo access for quick preview testing
   const handleDemoAccess = () => {
     const demoUser = StorageController.setDemoUser();
-    onShowToast(`¡Bienvenido a la Cuenta Demo!`, `Has ingresado con éxito como ${demoUser.name} sin requerir Google ni registro.`, 'success');
+    onShowToast(`¡Bienvenido a la Cuenta Demo!`, `Has ingresado con éxito como ${demoUser.name} en modo de prueba.`, 'success');
     onAuthSuccess(demoUser);
   };
 
@@ -232,7 +208,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/80 border border-slate-200/80 text-[11px] font-semibold text-slate-600 shadow-xs">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Acceso Seguro con Firebase</span>
+            <span>Acceso Seguro VocAcción</span>
           </div>
         </div>
       </header>
@@ -284,111 +260,39 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
               </div>
             )}
 
-            {/* 1. GOOGLE AUTH BUTTON (Available in both Login and Register modes) */}
+            {/* Mode Selector Tabs */}
             {mode !== 'forgot-password' && (
-              <div className="mb-5">
+              <div className="flex rounded-2xl bg-slate-100 p-1 mb-5">
                 <button
-                  id="google-signin-btn"
                   type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={isGoogleLoading || isLoading}
-                  className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 text-slate-800 font-semibold text-sm border border-slate-200/90 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex items-center justify-center gap-3 group active:scale-[0.99] disabled:opacity-70 disabled:pointer-events-none"
+                  id="tab-login"
+                  onClick={() => {
+                    clearMessages();
+                    setMode('login');
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                    mode === 'login'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  {isGoogleLoading ? (
-                    <RefreshCw className="w-4 h-4 text-slate-600 animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
-                      <path
-                        fill="#4285F4"
-                        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.26 21.36 7.33 24 12 24z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.16 0 9.97 0 12s.46 3.84 1.26 5.42l4.02-3.15z"
-                      />
-                      <path
-                        fill="#EA4335"
-                        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                      />
-                    </svg>
-                  )}
-                  <span className="font-['Outfit',sans-serif] tracking-wide text-slate-800 font-bold">
-                    {isGoogleLoading ? 'Conectando con Google...' : 'Continuar con Google'}
-                  </span>
+                  Iniciar Sesión
                 </button>
-
-                {/* FAST DEMO ACCESS CARD (No Google or Registration needed) */}
-                <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-br from-purple-50/90 via-pink-50/50 to-amber-50/70 border border-purple-200/80 shadow-xs text-left">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-purple-600 text-white shadow-xs">
-                        <Sparkles className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="text-xs font-bold text-slate-900 font-['Outfit',sans-serif]">
-                        ¿Acceder sin Google ni Registrarte?
-                      </span>
-                    </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 shrink-0">
-                      Cuenta Demo
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-slate-600 mb-2.5 leading-relaxed">
-                    Hemos habilitado una <strong>Cuenta de Prueba</strong> con perfil de estudiante, resultados del test RIASEC y carreras guardadas lista para explorar.
-                  </p>
-
-                  <div className="bg-white/90 rounded-xl px-2.5 py-2 border border-purple-100 text-[11px] text-slate-600 mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div>
-                        <span className="text-slate-400">Usuario: </span>
-                        <code className="text-purple-700 font-mono font-bold">demo@vocaccion.edu</code>
-                      </div>
-                      <div className="text-slate-300">|</div>
-                      <div>
-                        <span className="text-slate-400">Clave: </span>
-                        <code className="text-purple-700 font-mono font-bold">demo123</code>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmail('demo@vocaccion.edu');
-                        setPassword('demo123');
-                        setMode('login');
-                      }}
-                      className="text-purple-600 hover:text-purple-800 text-[11px] font-bold hover:underline"
-                    >
-                      Autocompletar campos
-                    </button>
-                  </div>
-
-                  <button
-                    id="btn-fast-demo-login"
-                    type="button"
-                    onClick={handleDemoAccess}
-                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-700 hover:to-indigo-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all flex items-center justify-center gap-2 active:scale-[0.99] font-['Outfit',sans-serif] tracking-wide"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Ingresar con Cuenta Demo (1 Clic)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Divider */}
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200"></div>
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="px-3 bg-white text-slate-500 font-medium">
-                      o con tu correo electrónico
-                    </span>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  id="tab-register"
+                  onClick={() => {
+                    clearMessages();
+                    setMode('register');
+                  }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
+                    mode === 'register'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Crear Cuenta Nueva
+                </button>
               </div>
             )}
 
@@ -467,7 +371,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                 <button
                   id="btn-submit-login"
                   type="submit"
-                  disabled={isLoading || isGoogleLoading}
+                  disabled={isLoading}
                   className="w-full mt-2 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:via-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-500/20 hover:shadow-lg hover:shadow-purple-500/30 transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-70 font-['Outfit',sans-serif] tracking-wide"
                 >
                   {isLoading ? (
@@ -735,7 +639,6 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                   type="submit"
                   disabled={
                     isLoading || 
-                    isGoogleLoading || 
                     !name.trim() || 
                     !validateEmail(email).isValid || 
                     !isPasswordValid(password) || 

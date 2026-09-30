@@ -16,7 +16,8 @@ import {
   X,
   ChevronDown,
   ShieldCheck,
-  ArrowLeft
+  ArrowLeft,
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -26,6 +27,7 @@ interface NavbarProps {
   onOpenAuth: (mode?: 'login' | 'register') => void;
   onLogout: () => void;
   savedCareersCount: number;
+  onOpenAccessibility?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -34,19 +36,19 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onOpenAuth,
   onLogout,
-  savedCareersCount
+  savedCareersCount,
+  onOpenAccessibility
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   const navItems: { id: ViewType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'home', label: 'Inicio', icon: Compass },
-    { id: 'test', label: 'Test Vocacional', icon: Sparkles },
-    { id: 'results', label: 'Resultados', icon: BarChart3 },
+    { id: 'test', label: 'Test', icon: Sparkles },
+    { id: 'categories', label: 'Categorías', icon: Layers },
     { id: 'careers', label: 'Carreras', icon: BookOpen },
-    { id: 'universities', label: 'Universidades', icon: Building2 },
-    { id: 'scholarships', label: 'Becas', icon: Award },
-    { id: 'profile', label: 'Perfil', icon: UserIcon }
+    { id: 'results', label: 'Resultados', icon: BarChart3 },
+    { id: 'profile', label: 'Mi Perfil', icon: UserIcon }
   ];
 
   const handleNavClick = (view: ViewType) => {
@@ -109,6 +111,19 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right actions: Compare, Favorites, User Profile / Auth */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Accessibility / Personalizar experiencia quick button */}
+            {onOpenAccessibility && (
+              <button
+                id="navbar-a11y-btn"
+                onClick={onOpenAccessibility}
+                title="Personalizar mi experiencia (Accesibilidad y adaptaciones)"
+                className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200/80 transition-all flex items-center gap-1.5 shadow-xs text-xs font-bold"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span className="hidden xl:inline">Personalizar</span>
+              </button>
+            )}
+
             {/* Career Compare Quick Button */}
             <button
               id="compare-careers-nav-btn"
@@ -312,6 +327,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             );
           })}
+          {onOpenAccessibility && (
+            <button
+              id="mobile-nav-a11y-btn"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenAccessibility();
+              }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/80 transition-colors"
+            >
+              <SlidersHorizontal className="w-5 h-5 text-purple-600" />
+              <span>Personalizar experiencia</span>
+            </button>
+          )}
+
           <button
             id="mobile-nav-compare-btn"
             onClick={() => handleNavClick('compare')}

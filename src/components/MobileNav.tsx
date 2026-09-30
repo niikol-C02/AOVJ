@@ -1,6 +1,6 @@
 import React from 'react';
 import { ViewType } from '../types';
-import { Compass, Sparkles, BookOpen, Building2, User as UserIcon } from 'lucide-react';
+import { Compass, Sparkles, BookOpen, Layers, User as UserIcon } from 'lucide-react';
 
 interface MobileNavProps {
   currentView: ViewType;
@@ -11,8 +11,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentView, onNavigate })
   const items = [
     { id: 'home' as ViewType, label: 'Inicio', icon: Compass },
     { id: 'test' as ViewType, label: 'Test', icon: Sparkles },
+    { id: 'categories' as ViewType, label: 'Categorías', icon: Layers },
     { id: 'careers' as ViewType, label: 'Carreras', icon: BookOpen },
-    { id: 'universities' as ViewType, label: 'U-Directorio', icon: Building2 },
     { id: 'profile' as ViewType, label: 'Perfil', icon: UserIcon },
   ];
 

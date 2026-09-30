@@ -16,6 +16,7 @@ import { CareerDetailModal } from './components/CareerDetailModal';
 import { UniversityDetailModal } from './components/UniversityDetailModal';
 import { ScholarshipDetailModal } from './components/ScholarshipDetailModal';
 import { CareerCompareModal } from './components/CareerCompareModal';
+import { AccessibilityModal } from './components/AccessibilityModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Compass, RefreshCw } from 'lucide-react';
 
@@ -340,7 +341,7 @@ export default function App() {
           />
         )}
 
-        {currentView === 'test' && (
+        {(currentView === 'test' || currentView === 'categories') && (
           <TestView
             currentUser={currentUser}
             onCompleteTest={handleCompleteTest}
@@ -348,6 +349,7 @@ export default function App() {
             accessibilityPreferences={currentUser?.accessibilityPreferences || accessibilityPreferences}
             onUpdateAccessibilityPreferences={handleUpdateAccessibilityPreferences}
             onUpdateUserAge={handleUpdateUserAge}
+            initialScreen="categories"
           />
         )}
 

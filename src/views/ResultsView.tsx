@@ -392,6 +392,18 @@ export const ResultsView: React.FC<ResultsViewProps> = ({
                       {career.shortDescription}
                     </p>
 
+                    {/* Explanación pedagógica de por qué aparece la carrera (Requisito 10) */}
+                    {career.explanation && (
+                      <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200/80 text-[11px] text-amber-950 space-y-1">
+                        <span className="font-bold flex items-center gap-1 text-[10px] uppercase tracking-wide text-amber-800">
+                          💡 ¿Por qué aparece en tus opciones?
+                        </span>
+                        <p className="text-slate-700 leading-relaxed font-normal">
+                          {career.explanation}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100 text-[11px] text-purple-950 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold">📚 {career.semestersCount ? `${career.semestersCount} semestres` : career.duration}</span>

@@ -258,9 +258,24 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                     className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block">Menos elementos visuales simultáneos</span>
+                    <span className="text-xs font-bold text-slate-800 block">Menos elementos visuales en pantalla</span>
                     <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
-                      Presentación limpia que prioriza el contenido principal.
+                      Presentación simplificada que prioriza el contenido principal sin distracciones.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:border-purple-300 bg-white hover:bg-purple-50/30 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={!!preferences.visualScreenReader}
+                    onChange={() => togglePref('visualScreenReader')}
+                    className="mt-0.5 rounded text-purple-600 focus:ring-purple-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Lectura con síntesis de voz / lectores de pantalla</span>
+                    <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                      Botón de audio para escuchar preguntas e instrucciones leídas en voz alta.
                     </span>
                   </div>
                 </label>
@@ -303,6 +318,21 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                     </span>
                   </div>
                 </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:border-emerald-300 bg-white hover:bg-emerald-50/30 cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={!!preferences.reducedMotion}
+                    onChange={() => togglePref('reducedMotion')}
+                    className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Reducción de animaciones</span>
+                    <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                      Evita movimientos, pulsos o efectos visuales innecesarios en pantalla.
+                    </span>
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -331,14 +361,32 @@ export const AccessibilityModal: React.FC<AccessibilityModalProps> = ({
                 <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:border-indigo-300 bg-white hover:bg-indigo-50/30 cursor-pointer transition-colors">
                   <input
                     type="checkbox"
-                    checked={!!preferences.cognitiveClearLanguage}
-                    onChange={() => togglePref('cognitiveClearLanguage')}
+                    checked={!!preferences.cognitiveClearLanguage || !!preferences.simpleInstructions}
+                    onChange={() => {
+                      togglePref('cognitiveClearLanguage');
+                      togglePref('simpleInstructions');
+                    }}
                     className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
                   />
                   <div>
-                    <span className="text-xs font-bold text-slate-800 block">Lenguaje claro y directo</span>
+                    <span className="text-xs font-bold text-slate-800 block">Instrucciones más sencillas</span>
                     <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
-                      Instrucciones paso a paso evitando vocabulario innecesariamente complejo.
+                      Pautas paso a paso con explicaciones directas y sin términos confusos.
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:border-indigo-300 bg-white hover:bg-indigo-50/30 cursor-pointer transition-colors sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={!!preferences.repeatInstructions}
+                    onChange={() => togglePref('repeatInstructions')}
+                    className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Posibilidad de repetir instrucciones</span>
+                    <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                      Botones siempre visibles para releer o reescuchar la indicación las veces que sea necesario.
                     </span>
                   </div>
                 </label>

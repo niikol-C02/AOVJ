@@ -179,11 +179,11 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
             </p>
           </div>
 
-          {/* Description */}
+          {/* Description & What is studied */}
           <div className="p-5 rounded-2xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-2">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-purple-600" />
-              <span>¿De qué trata esta carrera?</span>
+              <span>¿Qué se estudia en esta carrera?</span>
             </h3>
             <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-medium">
               {career.shortDescription}
@@ -193,11 +193,11 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
             </p>
           </div>
 
-          {/* Necessary Skills & Competencies */}
+          {/* Necessary Skills that can be useful */}
           <div className="space-y-2.5">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-pink-500" />
-              <span>Habilidades y Aptitudes Clave</span>
+              <span>Habilidades que pueden ser útiles</span>
             </h3>
             <div className="flex flex-wrap gap-2">
               {career.necessarySkills.map((skill, index) => (
@@ -216,7 +216,7 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
           <div className="p-5 rounded-2xl bg-purple-100/40 backdrop-blur-xl border border-purple-200/60 space-y-3 shadow-xs">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-purple-600" />
-              <span>Campos Laborales & Dónde podrás trabajar</span>
+              <span>Posibles campos laborales</span>
             </h3>
             <div className="grid sm:grid-cols-2 gap-2">
               {career.workFields.map((field, idx) => (
@@ -228,10 +228,10 @@ export const CareerDetailModal: React.FC<CareerDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Daily Activities */}
+          {/* Professional Activities */}
           <div className="space-y-2.5">
             <h3 className="text-sm font-bold text-slate-900">
-              ¿Qué hace un profesional en su día a día?
+              Algunas actividades que puede realizar un profesional
             </h3>
             <ul className="space-y-2 text-xs text-slate-700">
               {career.dailyActivities.map((activity, idx) => (

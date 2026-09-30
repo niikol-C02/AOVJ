@@ -9,10 +9,11 @@ import {
   Layers, 
   Clock, 
   DollarSign, 
-  GraduationCap,
-  Compass,
-  ArrowUpDown,
-  ChevronDown
+  GraduationCap, 
+  Compass, 
+  ArrowUpDown, 
+  ChevronDown,
+  ArrowRight
 } from 'lucide-react';
 
 interface CareersViewProps {
@@ -275,16 +276,24 @@ export const CareersView: React.FC<CareersViewProps> = ({
                       );
                     })()}
 
-                    {/* Skills tags preview */}
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {(career.necessarySkills || []).slice(0, 2).map((sk, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-purple-900 text-[10px] font-medium"
-                        >
-                          {sk}
-                        </span>
-                      ))}
+                    {/* Skills and Work fields preview */}
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex flex-wrap gap-1">
+                        {(career.necessarySkills || []).slice(0, 2).map((sk, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded-md bg-white/80 border border-slate-200/60 text-purple-900 text-[10px] font-medium"
+                          >
+                            ✓ {sk}
+                          </span>
+                        ))}
+                      </div>
+
+                      {career.workFields && career.workFields.length > 0 && (
+                        <p className="text-[10px] text-slate-500 line-clamp-1">
+                          <span className="font-semibold text-slate-700">Campos:</span> {career.workFields.slice(0, 2).join(', ')}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -320,9 +329,10 @@ export const CareersView: React.FC<CareersViewProps> = ({
                       {/* View Details modal button */}
                       <button
                         onClick={() => onSelectCareer(career)}
-                        className="flex-1 py-2.5 px-3 rounded-xl bg-purple-100/70 hover:bg-purple-200/80 text-purple-900 font-bold text-xs transition-colors text-center border border-purple-200/50 shadow-xs"
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-xs"
                       >
-                        Ver Ficha Completa
+                        <span>Conocer más</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>

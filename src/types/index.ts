@@ -1,6 +1,7 @@
 export type ViewType = 
   | 'home'
   | 'test'
+  | 'categories'
   | 'results'
   | 'careers'
   | 'universities'
@@ -11,14 +12,49 @@ export type ViewType =
 
 export type AuthMode = 'login' | 'register' | 'forgot-password';
 
-export type AgeStage = 'infancia' | 'adolescencia' | 'juventud' | 'adultez';
+export type AgeStage = '13-15' | '16-17' | '18-21' | '22+' | 'infancia' | 'adolescencia' | 'juventud' | 'adultez';
 
 export function getAgeStage(age?: number): AgeStage {
-  if (age === undefined || age === null || Number.isNaN(age)) return 'adolescencia';
-  if (age <= 12) return 'infancia';
-  if (age <= 17) return 'adolescencia';
-  if (age <= 25) return 'juventud';
-  return 'adultez';
+  if (age === undefined || age === null || Number.isNaN(age)) return '16-17';
+  if (age <= 15) return '13-15';
+  if (age <= 17) return '16-17';
+  if (age <= 21) return '18-21';
+  return '22+';
+}
+
+export function getAgeStageLabel(age?: number): { title: string; subtitle: string; range: string } {
+  const stage = getAgeStage(age);
+  switch (stage) {
+    case '13-15':
+    case 'infancia':
+      return {
+        title: 'Exploración Vocacional Temprana',
+        subtitle: 'Descubrimiento de curiosidades, talentos escolares y temas de interés',
+        range: '13–15 años'
+      };
+    case '16-17':
+    case 'adolescencia':
+      return {
+        title: 'Decisión Preuniversitaria y Bachillerato',
+        subtitle: 'Orientación hacia carreras, preparación preuniversitaria y opciones de estudio',
+        range: '16–17 años'
+      };
+    case '18-21':
+    case 'juventud':
+      return {
+        title: 'Educación Superior y Primer Empleo',
+        subtitle: 'Enfoque en programas universitarios, técnicos, tecnológicos y proyección laboral',
+        range: '18–21 años'
+      };
+    case '22+':
+    case 'adultez':
+    default:
+      return {
+        title: 'Reorientación y Crecimiento Profesional',
+        subtitle: 'Ampliación de competencias, nuevos campos laborales y educación continua',
+        range: '22 años en adelante'
+      };
+  }
 }
 
 export interface AccessibilityPreferences {
@@ -35,14 +71,38 @@ export interface AccessibilityPreferences {
   readingAssistance?: boolean;
   sensoryCalm?: boolean;
   timeUnlimited?: boolean;
+  reducedMotion?: boolean;
+  simpleInstructions?: boolean;
+  repeatInstructions?: boolean;
 }
 
 export type TestCategoryId = 
+  | 'intereses'
+  | 'habilidades'
+  | 'habilidades-aptitudes'
+  | 'personalidad'
+  | 'areas-profesionales'
+  | 'preferencias-academicas'
+  | 'orientacion-vocacional'
   | 'estudiantes'
   | 'exploracion'
   | 'perfil-profesional'
   | 'intereses-habilidades'
   | 'reorientacion';
+
+export interface TestDefinition {
+  id: string;
+  name: string;
+  categoryId: TestCategoryId;
+  categoryName: string;
+  shortDescription: string;
+  whatItIsFor: string;
+  approxTime: string;
+  questionCount: number;
+  difficulty?: string;
+  iconName: string;
+  badge: string;
+}
 
 export interface User {
   id: string;

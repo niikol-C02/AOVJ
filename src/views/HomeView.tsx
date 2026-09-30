@@ -1,6 +1,7 @@
 import React from 'react';
 import { Career, TestResult, User, ViewType } from '../types';
 import { DailyTipCard } from '../components/DailyTipCard';
+import { TEST_CATEGORIES_DATA } from '../models/adaptiveTestBank';
 import { 
   Sparkles, 
   Compass, 
@@ -15,7 +16,10 @@ import {
   Zap, 
   GraduationCap, 
   Clock,
-  Layers
+  Layers,
+  Brain,
+  UserCheck,
+  Briefcase
 } from 'lucide-react';
 
 interface HomeViewProps {
@@ -261,6 +265,76 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Categories Section: ¿Qué quieres conocer sobre ti? */}
+      <section className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-purple-700 uppercase tracking-wider mb-1">
+              <Layers className="w-4 h-4 text-purple-600" />
+              <span>Exploración por Áreas</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 font-['Outfit',sans-serif]">
+              ¿Qué quieres conocer sobre ti?
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600">
+              Elige el tipo de test vocacional según lo que desees descubrir hoy:
+            </p>
+          </div>
+          <button
+            onClick={() => onNavigate('categories')}
+            className="text-xs sm:text-sm font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 self-start sm:self-auto"
+          >
+            <span>Ver todas las categorías</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {TEST_CATEGORIES_DATA.map(category => {
+            const getIcon = () => {
+              switch (category.id) {
+                case 'intereses': return <Sparkles className="w-5 h-5 text-amber-500" />;
+                case 'habilidades-aptitudes': return <Brain className="w-5 h-5 text-emerald-500" />;
+                case 'personalidad': return <UserCheck className="w-5 h-5 text-pink-500" />;
+                case 'areas-profesionales': return <Briefcase className="w-5 h-5 text-blue-500" />;
+                case 'preferencias-academicas': return <BookOpen className="w-5 h-5 text-indigo-500" />;
+                case 'orientacion-vocacional': return <Compass className="w-5 h-5 text-purple-600" />;
+                default: return <Sparkles className="w-5 h-5 text-purple-600" />;
+              }
+            };
+
+            return (
+              <div
+                key={category.id}
+                onClick={() => onNavigate('categories')}
+                className="p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 hover:border-purple-300 hover:bg-white/90 hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col justify-between space-y-3 shadow-xs group"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center group-hover:scale-105 transition-transform">
+                      {getIcon()}
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100/70 text-purple-800">
+                      {category.availableTests.length} tests
+                    </span>
+                  </div>
+                  <h3 className="text-base font-extrabold text-slate-900 group-hover:text-purple-700 transition-colors">
+                    {category.title}
+                  </h3>
+                  <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                    {category.description}
+                  </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-purple-700">
+                  <span>Explorar test</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 

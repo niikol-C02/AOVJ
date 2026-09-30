@@ -255,23 +255,23 @@ export class TestEngine {
       // Generate orientative and inclusive explanation (never imperative)
       let explanation = '';
       if (isBeautyOrEsthetics) {
-        explanation = `Podrías explorar áreas afines a ${career.name.toLowerCase()}, donde tu sensibilidad por el cuidado, la estética y la interacción con personas encontrarán un camino ideal de desarrollo.`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por el cuidado personal, la estética, la salud integral y el servicio directo a personas.`;
       } else if (isFashionOrTextile) {
-        explanation = `Podrías considerar explorar el universo de ${career.name.toLowerCase()}, aprovechando tu interés por la creatividad manual, los materiales y el diseño de indumentaria.`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por la creatividad visual, el uso de materiales, la moda y el diseño de indumentaria.`;
       } else if (isAudiovisual) {
-        explanation = `Una excelente alternativa orientativa para ti podría ser ${career.name.toLowerCase()}, dada tu afinidad con la narración visual, la imagen y los medios contemporáneos.`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por la narración visual, la producción de contenidos, la fotografía y los medios digitales.`;
       } else if (isDecorOrInterior) {
-        explanation = `Podrías explorar opciones relacionadas con ${career.name.toLowerCase()}, donde tu sentido estético para armonizar entornos y transformar espacios cobrará vida.`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por armonizar entornos habitables, la iluminación y la estética de espacios interiores.`;
       } else if (isPerformingOrMusic) {
-        explanation = `Podrías explorar campos vinculados a ${career.name.toLowerCase()}, pues tus intereses reflejan pasión por la autoexpresión, la sensibilidad escénica y el arte sonoro.`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por la expresión artística corporal y sonora, la música y la sensibilidad escénica.`;
       } else if (careerIdLower.includes('criminalistica') || careerNameLower.includes('criminalística')) {
-        explanation = 'Podrías explorar la investigación forense y las ciencias periciales, acorde a tu curiosidad analítica y gusto por examinar evidencias.';
+        explanation = 'Esta carrera aparece entre tus opciones porque tus resultados muestran interés por la observación detallada, la recolección de evidencias científicas y el esclarecimiento de hechos.';
       } else if (careerIdLower.includes('criminologia') || careerNameLower.includes('criminología')) {
-        explanation = 'Podrías explorar áreas relacionadas con la criminología y la conducta humana, impulsado por tu sensibilidad hacia la justicia social.';
+        explanation = 'Esta carrera aparece entre tus opciones porque tus resultados muestran interés por la comprensión de la conducta social, el derecho preventivo y la justicia.';
       } else {
         const pDim = RIASEC_DIMENSIONS[career.riasecPrimary];
         const sDim = RIASEC_DIMENSIONS[career.riasecSecondary];
-        explanation = `Podrías explorar este campo vocacional, respaldado por tu afinidad con los perfiles ${pDim?.name || career.riasecPrimary} (${primaryScore}%) y ${sDim?.name || career.riasecSecondary} (${secondaryScore}%).`;
+        explanation = `Esta carrera aparece entre tus opciones porque tus resultados muestran interés por actividades del perfil ${pDim?.name || career.riasecPrimary} y afinidad con el campo ${sDim?.name || career.riasecSecondary}.`;
       }
 
       return {
