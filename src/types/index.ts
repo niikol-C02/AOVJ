@@ -109,6 +109,7 @@ export interface User {
   name: string;
   email: string;
   role?: 'admin' | 'user';
+  status?: 'active' | 'suspended';
   password?: string;
   age?: number;
   educationLevel?: string;
@@ -122,6 +123,23 @@ export interface User {
   testHistory: TestResult[];
   answeredQuestionIds?: number[];
   accessibilityPreferences?: AccessibilityPreferences;
+}
+
+export type ConstantCategory = 
+  | 'vocational' 
+  | 'security' 
+  | 'platform' 
+  | 'limits' 
+  | 'notifications';
+
+export interface SystemConstant {
+  key: string;
+  value: string;
+  category: ConstantCategory;
+  description: string;
+  dataType: 'string' | 'number' | 'boolean' | 'json';
+  updatedAt: string;
+  updatedBy?: string;
 }
 
 export type AdviceCategory = 
@@ -276,4 +294,29 @@ export interface Scholarship {
   applicationLink: string;
   fieldOfStudy: string[];
   isFeatured?: boolean;
+}
+
+export interface DailyChallengeOptionStat {
+  option: string;
+  votes: number;
+  percentage: number;
+}
+
+export interface DailyChallenge {
+  id: string;
+  question: string;
+  options: string[];
+  active: boolean;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  totalVotes?: number;
+  stats?: DailyChallengeOptionStat[];
+  userVote?: number | null; // index of the option chosen by the current user
+}
+
+export interface DailyChallengeVoteResponse {
+  success: boolean;
+  challenge: DailyChallenge;
+  userVote: number;
 }

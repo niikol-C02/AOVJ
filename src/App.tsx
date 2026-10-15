@@ -17,6 +17,7 @@ import { UniversityDetailModal } from './components/UniversityDetailModal';
 import { ScholarshipDetailModal } from './components/ScholarshipDetailModal';
 import { CareerCompareModal } from './components/CareerCompareModal';
 import { AccessibilityModal } from './components/AccessibilityModal';
+import { AdminFloatingWidget } from './components/AdminFloatingWidget';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { Compass, RefreshCw } from 'lucide-react';
 
@@ -32,12 +33,86 @@ import { ProfileView } from './views/ProfileView';
 import { AdminDashboardView } from './views/AdminDashboardView';
 
 export default function App() {
-  // Navigation
-  const [currentView, setCurrentView] = useState<ViewType>('home');
+  // Navigation & Route Detection
+  const getInitialView = (): ViewType => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path === '/admin' || path === '/dashboard-admin' || hash === '#/admin' || hash === '#admin') {
+        return 'admin';
+      }
+      if (path === '/test') return 'test';
+      if (path === '/carreras' || path === '/careers') return 'careers';
+      if (path === '/universidades' || path === '/universities') return 'universities';
+      if (path === '/becas' || path === '/scholarships') return 'scholarships';
+      if (path === '/perfil' || path === '/profile') return 'profile';
+    }
+    return 'home';
+  };
+
+  const [currentView, setCurrentView] = useState<ViewType>(getInitialView);
 
   // User session
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
+
+  // Toast notifications
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const dismissToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const showToast = (title: string, description?: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const newToast: ToastMessage = { id, title, description, type };
+    setToasts(prev => [...prev, newToast]);
+
+    // Auto dismiss after 4.5 seconds
+    setTimeout(() => {
+      dismissToast(id);
+    }, 4500);
+  };
+
+  // Synchronized Navigation with Browser History & Protected Routes
+  const handleNavigate = (view: ViewType) => {
+    if (view === 'admin') {
+      if (!currentUser || currentUser.role !== 'admin') {
+        showToast('Acceso Denegado (403)', 'Esta área requiere privilegios de administrador autorizados.', 'error');
+        return;
+      }
+      if (window.location.pathname !== '/admin') {
+        window.history.pushState(null, '', '/admin');
+      }
+    } else {
+      if (window.location.pathname === '/admin' || window.location.pathname === '/dashboard-admin') {
+        window.history.pushState(null, '', '/');
+      }
+    }
+    setCurrentView(view);
+  };
+
+  // Browser Back/Forward navigation listener
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      if (path === '/admin' || path === '/dashboard-admin' || hash === '#/admin' || hash === '#admin') {
+        if (currentUser?.role === 'admin') {
+          setCurrentView('admin');
+        } else {
+          showToast('Acceso Denegado (403)', 'Ruta protegida para administradores autorizados.', 'error');
+          setCurrentView('home');
+          window.history.replaceState(null, '', '/');
+        }
+      } else {
+        setCurrentView('home');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [currentUser]);
 
   // Auth modal
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -55,9 +130,6 @@ export default function App() {
     'diseno-digital-ux-ui'
   ]);
 
-  // Toast notifications
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
   // Initialize Firebase Auth state listener
   useEffect(() => {
     const unsubscribe = StorageController.initAuthListener((user) => {
@@ -69,21 +141,6 @@ export default function App() {
       unsubscribe();
     };
   }, []);
-
-  const showToast = (title: string, description?: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const newToast: ToastMessage = { id, title, description, type };
-    setToasts(prev => [...prev, newToast]);
-
-    // Auto dismiss after 4.5 seconds
-    setTimeout(() => {
-      dismissToast(id);
-    }, 4500);
-  };
-
-  const dismissToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
 
   // Auth actions
   const handleOpenAuth = (mode: AuthMode = 'login') => {
@@ -110,7 +167,7 @@ export default function App() {
     await StorageController.logout();
     setCurrentUser(null);
     showToast('Sesión cerrada', 'Has salido de tu cuenta de VocAcción.', 'info');
-    setCurrentView('home');
+    handleNavigate('home');
   };
 
   // Accessibility Preferences
@@ -124,15 +181,24 @@ export default function App() {
     }
   }, [currentUser?.accessibilityPreferences]);
 
-  // Guard for Admin Dashboard
+  // Guard for Admin Dashboard Route & Permissions
   useEffect(() => {
-    if (currentView === 'admin') {
-      if (!currentUser || currentUser.role !== 'admin') {
-        showToast('Acceso Denegado (403)', 'Esta área requiere privilegios de administrador autorizados.', 'error');
-        setCurrentView('home');
+    if (!isAuthChecking) {
+      if (currentView === 'admin') {
+        if (!currentUser || currentUser.role !== 'admin') {
+          showToast('Acceso Denegado (403)', 'Esta área requiere privilegios de administrador autorizados.', 'error');
+          setCurrentView('home');
+          if (window.location.pathname === '/admin' || window.location.pathname === '/dashboard-admin') {
+            window.history.replaceState(null, '', '/');
+          }
+        } else {
+          if (window.location.pathname !== '/admin') {
+            window.history.replaceState(null, '', '/admin');
+          }
+        }
       }
     }
-  }, [currentView, currentUser]);
+  }, [currentView, currentUser, isAuthChecking]);
 
   const handleUpdateAccessibilityPreferences = async (newPrefs: AccessibilityPreferences) => {
     setAccessibilityPreferences(newPrefs);
@@ -321,7 +387,7 @@ export default function App() {
       {/* Top Main Navbar */}
       <Navbar
         currentView={currentView}
-        onNavigate={setCurrentView}
+        onNavigate={handleNavigate}
         currentUser={currentUser}
         onOpenAuth={handleOpenAuth}
         onLogout={handleLogout}
@@ -333,11 +399,12 @@ export default function App() {
         {currentView === 'home' && (
           <HomeView
             currentUser={currentUser}
-            onNavigate={setCurrentView}
+            onNavigate={handleNavigate}
             latestTestResult={latestTestResult}
             trendingCareers={CAREERS_DATA.filter(c => c.isTrending)}
             onSelectCareer={setSelectedCareer}
             onOpenAuth={handleOpenAuth}
+            onShowToast={showToast}
           />
         )}
 
@@ -357,11 +424,11 @@ export default function App() {
           <ResultsView
             testResult={latestTestResult}
             currentUser={currentUser}
-            onRetakeTest={() => setCurrentView('test')}
+            onRetakeTest={() => handleNavigate('test')}
             onSelectCareer={setSelectedCareer}
             onToggleSaveCareer={handleToggleFavoriteCareer}
             savedCareers={currentUser?.savedCareers || []}
-            onNavigateToView={setCurrentView}
+            onNavigateToView={handleNavigate}
             onCompareToggle={handleToggleCompareCareer}
             comparedCareers={comparedCareerIds}
             onShowToast={showToast}
@@ -377,7 +444,7 @@ export default function App() {
             onCompareToggle={handleToggleCompareCareer}
             comparedCareers={comparedCareerIds}
             latestTestResult={latestTestResult}
-            onNavigateToView={setCurrentView}
+            onNavigateToView={handleNavigate}
           />
         )}
 
@@ -412,7 +479,7 @@ export default function App() {
             onSelectCareer={setSelectedCareer}
             onSelectUniversity={setSelectedUniversity}
             onSelectScholarship={setSelectedScholarship}
-            onNavigateToView={setCurrentView}
+            onNavigateToView={handleNavigate}
             onShowToast={showToast}
             onUpdatePreferences={handleUpdateAccessibilityPreferences}
             onUpdateAge={handleUpdateUserAge}
@@ -423,7 +490,7 @@ export default function App() {
           <div className="space-y-6">
             <CareerCompareModal
               isOpen={true}
-              onClose={() => setCurrentView('careers')}
+              onClose={() => handleNavigate('careers')}
               selectedCareers={comparedCareerObjects}
               allCareers={CAREERS_DATA}
               onAddCareer={handleAddToCompare}
@@ -437,7 +504,7 @@ export default function App() {
         {currentView === 'admin' && currentUser?.role === 'admin' && (
           <AdminDashboardView
             currentUser={currentUser}
-            onNavigate={setCurrentView}
+            onNavigate={handleNavigate}
             onShowToast={showToast}
           />
         )}
@@ -446,15 +513,15 @@ export default function App() {
       {/* Footer with Frosted Glass styling */}
       <footer className="relative z-10 mt-auto border-t border-white/60 bg-white/50 backdrop-blur-xl py-8 px-4 sm:px-6 lg:px-8 text-center text-xs text-slate-600 space-y-3 shadow-xs">
         <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-semibold text-slate-700">
-          <button onClick={() => setCurrentView('home')} className="hover:text-purple-700 transition-colors">Inicio</button>
+          <button onClick={() => handleNavigate('home')} className="hover:text-purple-700 transition-colors">Inicio</button>
           <span className="text-slate-300">•</span>
-          <button onClick={() => setCurrentView('test')} className="hover:text-purple-700 transition-colors">Test Vocacional</button>
+          <button onClick={() => handleNavigate('test')} className="hover:text-purple-700 transition-colors">Test Vocacional</button>
           <span className="text-slate-300">•</span>
-          <button onClick={() => setCurrentView('careers')} className="hover:text-purple-700 transition-colors">Carreras</button>
+          <button onClick={() => handleNavigate('careers')} className="hover:text-purple-700 transition-colors">Carreras</button>
           <span className="text-slate-300">•</span>
-          <button onClick={() => setCurrentView('universities')} className="hover:text-purple-700 transition-colors">Universidades</button>
+          <button onClick={() => handleNavigate('universities')} className="hover:text-purple-700 transition-colors">Universidades</button>
           <span className="text-slate-300">•</span>
-          <button onClick={() => setCurrentView('scholarships')} className="hover:text-purple-700 transition-colors">Becas</button>
+          <button onClick={() => handleNavigate('scholarships')} className="hover:text-purple-700 transition-colors">Becas</button>
         </div>
         <p className="text-slate-500">
           VocAcción © 2026 • Orientación Vocacional para Jóvenes y Estudiantes • Modelo Psicométrico RIASEC (Holland)
@@ -464,7 +531,7 @@ export default function App() {
       {/* Bottom Mobile Navigation for Phones */}
       <MobileNav
         currentView={currentView}
-        onNavigate={setCurrentView}
+        onNavigate={handleNavigate}
       />
 
       {/* Modals */}
@@ -483,7 +550,7 @@ export default function App() {
         onToggleSave={handleToggleFavoriteCareer}
         onCompareToggle={handleToggleCompareCareer}
         isCompared={!!selectedCareer && comparedCareerIds.includes(selectedCareer.id)}
-        onNavigateToView={setCurrentView}
+        onNavigateToView={handleNavigate}
         matchScore={
           selectedCareer
             ? latestTestResult?.recommendedCareers?.find(rc => rc.careerId === selectedCareer.id)?.matchPercentage
@@ -504,6 +571,13 @@ export default function App() {
         onClose={() => setSelectedScholarship(null)}
         isSaved={!!selectedScholarship && (currentUser?.savedScholarships?.includes(selectedScholarship.id) || false)}
         onToggleSave={handleToggleFavoriteScholarship}
+      />
+
+      {/* Floating Mode Toggle for Authorized Admins */}
+      <AdminFloatingWidget
+        currentUser={currentUser}
+        currentView={currentView}
+        onNavigate={handleNavigate}
       />
 
       {/* Toast Notifications */}

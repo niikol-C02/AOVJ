@@ -20,6 +20,7 @@ import {
   ChevronRight, 
   ArrowRight,
   Shield,
+  ShieldCheck,
   Sliders,
   Eye,
   Volume2,
@@ -185,13 +186,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onLogout}
-          className="px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-rose-600 border border-rose-200/80 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs backdrop-blur-sm"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Cerrar Sesión</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {currentUser.role === 'admin' && (
+            <button
+              id="profile-admin-dashboard-btn"
+              onClick={() => onNavigateToView('admin')}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-purple-700 via-indigo-700 to-slate-900 hover:from-purple-800 hover:to-slate-950 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-purple-900/30 transition-all active:scale-95"
+            >
+              <ShieldCheck className="w-4 h-4 text-pink-300" />
+              <span>Panel de Control (Admin)</span>
+            </button>
+          )}
+
+          <button
+            onClick={onLogout}
+            className="px-4 py-2.5 rounded-2xl bg-white/80 hover:bg-white text-rose-600 border border-rose-200/80 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs backdrop-blur-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Cerrar Sesión</span>
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

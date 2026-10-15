@@ -10,6 +10,7 @@ import {
 } from '../models/adaptiveTestBank';
 import { TestEngine } from '../controllers/TestEngine';
 import { AccessibilityModal } from '../components/AccessibilityModal';
+import { speechService } from '../utils/speechService';
 import confetti from 'canvas-confetti';
 import { 
   Sparkles, 
@@ -149,34 +150,36 @@ export const TestView: React.FC<TestViewProps> = ({
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isCalculating, setIsCalculating] = useState(false);
 
-  // Stop speech when changing screens or questions
+  // Stop speech when changing screens or questions or unmounting
   useEffect(() => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    speechService.stop();
+    setIsSpeaking(false);
+    return () => {
+      speechService.stop();
       setIsSpeaking(false);
-    }
+    };
   }, [currentScreen, currentStepIndex]);
 
   const speakText = (text: string) => {
-    if (!('speechSynthesis' in window)) {
-      onShowToast?.('Síntesis de voz', 'Tu navegador no soporta lectura por voz.', 'info');
-      return;
-    }
-
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      speechService.stop();
       setIsSpeaking(false);
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'es-ES';
-    utterance.rate = 0.95;
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    const started = speechService.speak(text, {
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => {
+        setIsSpeaking(false);
+        onShowToast?.('Síntesis de voz', 'No se pudo reproducir el audio en este dispositivo.', 'info');
+      }
+    });
+
+    if (!started) {
+      setIsSpeaking(false);
+      onShowToast?.('Síntesis de voz', 'Tu navegador o dispositivo no soporta lectura por voz.', 'info');
+    }
   };
 
   // Navigation handlers

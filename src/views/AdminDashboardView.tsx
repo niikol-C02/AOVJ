@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewType } from '../types';
+import { User, ViewType, SystemConstant, ConstantCategory } from '../types';
 import { StorageController } from '../controllers/StorageController';
 import { 
   LayoutDashboard, 
@@ -28,7 +28,22 @@ import {
   ChevronRight,
   TrendingUp,
   Activity,
-  Award
+  Award,
+  BarChart2,
+  MessageSquareQuote,
+  Edit2,
+  PieChart,
+  PlusCircle,
+  MinusCircle,
+  HelpCircle,
+  Vote,
+  Database,
+  Key,
+  ToggleLeft,
+  ToggleRight,
+  UserX,
+  UserCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { VOCATIONAL_QUESTION_BANK as QUESTIONS_DATA } from '../models/questionsData';
 import { COMPREHENSIVE_CAREERS_DATA } from '../models/careersData';
@@ -39,7 +54,7 @@ interface AdminDashboardViewProps {
   onShowToast: (title: string, desc?: string, type?: 'success' | 'error' | 'info') => void;
 }
 
-type AdminTab = 'overview' | 'users' | 'tests' | 'results' | 'config';
+type AdminTab = 'overview' | 'users' | 'constants' | 'challenges' | 'tests' | 'results' | 'config';
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentUser,
@@ -59,6 +74,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     riasecCounts: Record<string, number>;
     registrationsByDay: Record<string, number>;
     careerFrequency: Record<string, number>;
+    ageStats?: {
+      averageAge: number;
+      minAge: number;
+      maxAge: number;
+      usersByAgeRange: Record<string, number>;
+      allAgesList: { age: number; count: number }[];
+    };
+    recentUsers?: any[];
   }>({
     totalUsers: 0,
     totalTests: 0,
@@ -66,15 +89,49 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     averageMatch: 88,
     riasecCounts: { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 },
     registrationsByDay: {},
-    careerFrequency: {}
+    careerFrequency: {},
+    ageStats: {
+      averageAge: 17.2,
+      minAge: 14,
+      maxAge: 24,
+      usersByAgeRange: { '12-15': 2, '16-17': 5, '18-20': 4, '21-24': 1, '25+': 0 },
+      allAgesList: []
+    },
+    recentUsers: []
   });
 
-  // Users Data
+  // Users Data (Vista 1)
   const [usersList, setUsersList] = useState<any[]>([]);
   const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [userAgeFilter, setUserAgeFilter] = useState('all');
   const [userEduFilter, setUserEduFilter] = useState('all');
   const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
+  const [userToChangeRole, setUserToChangeRole] = useState<any | null>(null);
+  const [userToDelete, setUserToDelete] = useState<any | null>(null);
+
+  // System Constants Data (Vista 2)
+  const [constantsList, setConstantsList] = useState<SystemConstant[]>([]);
+  const [constantSearchTerm, setConstantSearchTerm] = useState('');
+  const [constantCategoryFilter, setConstantCategoryFilter] = useState<string>('all');
+  const [isConstantModalOpen, setIsConstantModalOpen] = useState(false);
+  const [isEditingConstant, setIsEditingConstant] = useState(false);
+  const [constantFormData, setConstantFormData] = useState<{
+    key: string;
+    value: string;
+    category: ConstantCategory;
+    description: string;
+    dataType: 'string' | 'number' | 'boolean' | 'json';
+  }>({
+    key: '',
+    value: '',
+    category: 'platform',
+    description: '',
+    dataType: 'string'
+  });
+  const [constantToDelete, setConstantToDelete] = useState<SystemConstant | null>(null);
+  const [isSavingConstant, setIsSavingConstant] = useState(false);
 
   // Tests & Questions
   const [testStats, setTestStats] = useState<{
@@ -95,6 +152,20 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [newQuestionCategory, setNewQuestionCategory] = useState('A');
   const [newQuestionArea, setNewQuestionArea] = useState('Artes, Creatividad y Diseño');
   const [newQuestionTopic, setNewQuestionTopic] = useState('');
+
+  // Daily Challenges (Pregunta del Día) State
+  const [challengesList, setChallengesList] = useState<any[]>([]);
+  const [isChallengeModalOpen, setIsChallengeModalOpen] = useState(false);
+  const [editingChallengeId, setEditingChallengeId] = useState<string | null>(null);
+  const [challengeQuestion, setChallengeQuestion] = useState('');
+  const [challengeOptions, setChallengeOptions] = useState<string[]>(['', '', '', '']);
+  const [challengeActive, setChallengeActive] = useState(true);
+  const [isSavingChallenge, setIsSavingChallenge] = useState(false);
+
+  // Challenge Stats Modal State
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [selectedChallengeStats, setSelectedChallengeStats] = useState<any | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   // Platform Config
   const [platformSettings, setPlatformSettings] = useState<Record<string, string>>({
@@ -142,6 +213,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         }
       } else if (tab === 'users') {
         await loadUsers();
+      } else if (tab === 'constants') {
+        await loadConstants();
+      } else if (tab === 'challenges') {
+        const res = await fetchWithAuth('/api/admin/daily-challenges');
+        if (res.ok) {
+          const data = await res.json();
+          setChallengesList(data.challenges || []);
+        }
       } else if (tab === 'tests') {
         const res = await fetchWithAuth('/api/admin/tests');
         if (res.ok) {
@@ -160,6 +239,182 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       console.error('Error fetching admin data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadConstants = async () => {
+    try {
+      const res = await fetchWithAuth('/api/admin/constants');
+      if (res.ok) {
+        const data = await res.json();
+        setConstantsList(data.constants || []);
+      }
+    } catch (err) {
+      console.error('Error loading constants:', err);
+    }
+  };
+
+  const handleChangeUserRole = async (user: any, newRole: 'admin' | 'user') => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${user.id}/role`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: newRole })
+      });
+      if (res.ok) {
+        onShowToast(
+          'Rol actualizado', 
+          `El rol de ${user.name} ahora es ${newRole === 'admin' ? 'Administrador' : 'Estudiante'}.`, 
+          'success'
+        );
+        setUserToChangeRole(null);
+        await loadUsers();
+      } else {
+        const data = await res.json();
+        onShowToast('Error', data.error || 'No se pudo cambiar el rol.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error', 'Fallo al comunicarse con el servidor.', 'error');
+    }
+  };
+
+  const handleToggleUserStatus = async (user: any) => {
+    const nextStatus = user.status === 'suspended' ? 'active' : 'suspended';
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${user.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus })
+      });
+      if (res.ok) {
+        onShowToast(
+          nextStatus === 'active' ? 'Cuenta activada' : 'Cuenta suspendida',
+          `El acceso de ${user.name} ha sido ${nextStatus === 'active' ? 'habilitado' : 'suspendido'}.`,
+          nextStatus === 'active' ? 'success' : 'info'
+        );
+        await loadUsers();
+      } else {
+        const data = await res.json();
+        onShowToast('Error', data.error || 'No se pudo modificar el estado.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error', 'Fallo de conexión al servidor.', 'error');
+    }
+  };
+
+  const handleDeleteUser = async (user: any) => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/users/${user.id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        onShowToast('Usuario eliminado', `Se eliminó a ${user.name} de la base de datos.`, 'success');
+        setUserToDelete(null);
+        await loadUsers();
+      } else {
+        const data = await res.json();
+        onShowToast('Error', data.error || 'No se pudo eliminar el usuario.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error', 'Fallo al eliminar el usuario.', 'error');
+    }
+  };
+
+  const handleOpenNewConstantModal = () => {
+    setConstantFormData({
+      key: '',
+      value: '',
+      category: 'platform',
+      description: '',
+      dataType: 'string'
+    });
+    setIsEditingConstant(false);
+    setIsConstantModalOpen(true);
+  };
+
+  const handleOpenEditConstantModal = (c: SystemConstant) => {
+    setConstantFormData({
+      key: c.key,
+      value: c.value,
+      category: c.category,
+      description: c.description,
+      dataType: c.dataType
+    });
+    setIsEditingConstant(true);
+    setIsConstantModalOpen(true);
+  };
+
+  const handleSaveConstant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!constantFormData.key.trim()) {
+      onShowToast('Campo requerido', 'Ingresa la clave (Key) de la constante.', 'error');
+      return;
+    }
+    if (constantFormData.value === undefined || constantFormData.value === '') {
+      onShowToast('Campo requerido', 'Ingresa el valor de la constante.', 'error');
+      return;
+    }
+
+    setIsSavingConstant(true);
+    try {
+      const endpoint = isEditingConstant 
+        ? `/api/admin/constants/${encodeURIComponent(constantFormData.key)}`
+        : '/api/admin/constants';
+      const method = isEditingConstant ? 'PUT' : 'POST';
+
+      const res = await fetchWithAuth(endpoint, {
+        method,
+        body: JSON.stringify(constantFormData)
+      });
+
+      if (res.ok) {
+        onShowToast(
+          isEditingConstant ? 'Constante actualizada' : 'Constante creada',
+          `La variable ${constantFormData.key} se guardó exitosamente en la base de datos.`,
+          'success'
+        );
+        setIsConstantModalOpen(false);
+        await loadConstants();
+      } else {
+        const data = await res.json();
+        onShowToast('Error', data.error || 'No se pudo guardar la constante.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error', 'Error al sincronizar con la base de datos.', 'error');
+    } finally {
+      setIsSavingConstant(false);
+    }
+  };
+
+  const handleDeleteConstant = async (constant: SystemConstant) => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/constants/${encodeURIComponent(constant.key)}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        onShowToast('Constante eliminada', `La variable ${constant.key} ha sido removida.`, 'success');
+        setConstantToDelete(null);
+        await loadConstants();
+      } else {
+        const data = await res.json();
+        onShowToast('Error', data.error || 'No se pudo eliminar la constante.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error', 'Error al procesar eliminación.', 'error');
+    }
+  };
+
+  const formatDate = (isoString?: string) => {
+    if (!isoString) return 'No registrada';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString('es-CO', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (_) {
+      return isoString;
     }
   };
 
@@ -252,6 +507,142 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       }
     } catch (err) {
       console.error('Error deleting question:', err);
+    }
+  };
+
+  // Challenge / Dinámica del Día Handlers
+  const handleOpenCreateChallenge = () => {
+    setEditingChallengeId(null);
+    setChallengeQuestion('');
+    setChallengeOptions(['', '', '', '']);
+    setChallengeActive(true);
+    setIsChallengeModalOpen(true);
+  };
+
+  const handleOpenEditChallenge = (ch: any) => {
+    setEditingChallengeId(ch.id);
+    setChallengeQuestion(ch.question);
+    const opts = Array.isArray(ch.options) && ch.options.length >= 2 ? ch.options : ['', ''];
+    setChallengeOptions(opts);
+    setChallengeActive(ch.active === true || ch.active === 1);
+    setIsChallengeModalOpen(true);
+  };
+
+  const handleAddOptionField = () => {
+    if (challengeOptions.length < 6) {
+      setChallengeOptions([...challengeOptions, '']);
+    }
+  };
+
+  const handleRemoveOptionField = (idx: number) => {
+    if (challengeOptions.length > 2) {
+      setChallengeOptions(challengeOptions.filter((_, i) => i !== idx));
+    }
+  };
+
+  const handleOptionChange = (idx: number, val: string) => {
+    const updated = [...challengeOptions];
+    updated[idx] = val;
+    setChallengeOptions(updated);
+  };
+
+  const handleSaveChallenge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!challengeQuestion.trim()) {
+      onShowToast('Pregunta obligatoria', 'Por favor ingresa el texto de la dinámica.', 'error');
+      return;
+    }
+    const cleanOpts = challengeOptions.map(o => o.trim()).filter(Boolean);
+    if (cleanOpts.length < 2) {
+      onShowToast('Opciones insuficientes', 'Escribe al menos dos opciones de respuesta válidas.', 'error');
+      return;
+    }
+
+    setIsSavingChallenge(true);
+    try {
+      const url = editingChallengeId 
+        ? `/api/admin/daily-challenges/${editingChallengeId}`
+        : '/api/admin/daily-challenges';
+      const method = editingChallengeId ? 'PUT' : 'POST';
+
+      const res = await fetchWithAuth(url, {
+        method,
+        body: JSON.stringify({
+          question: challengeQuestion.trim(),
+          options: cleanOpts,
+          active: challengeActive
+        })
+      });
+
+      if (res.ok) {
+        onShowToast(
+          editingChallengeId ? 'Dinámica actualizada' : 'Dinámica creada',
+          'Los cambios se guardaron exitosamente en el servidor.',
+          'success'
+        );
+        setIsChallengeModalOpen(false);
+        loadTabContent('challenges');
+      } else {
+        const err = await res.json();
+        onShowToast('Error al guardar', err.error || 'No se pudo guardar la dinámica.', 'error');
+      }
+    } catch (err) {
+      onShowToast('Error de conexión', 'No fue posible comunicar con el servidor.', 'error');
+    } finally {
+      setIsSavingChallenge(false);
+    }
+  };
+
+  const handleToggleChallengeActive = async (id: string, currentActive: boolean) => {
+    try {
+      const res = await fetchWithAuth(`/api/admin/daily-challenges/${id}/toggle`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active: !currentActive })
+      });
+      if (res.ok) {
+        onShowToast(
+          !currentActive ? 'Dinámica Activada' : 'Dinámica Desactivada',
+          !currentActive ? 'Ahora los estudiantes verán esta pregunta en la página.' : 'La dinámica fue pausada.',
+          'info'
+        );
+        loadTabContent('challenges');
+      }
+    } catch (err) {
+      console.error('Error toggling challenge active:', err);
+    }
+  };
+
+  const handleDeleteChallenge = async (id: string) => {
+    if (!confirm('¿Deseas eliminar permanentemente esta pregunta del día y todos sus votos registrados?')) return;
+    try {
+      const res = await fetchWithAuth(`/api/admin/daily-challenges/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        onShowToast('Dinámica eliminada', 'La pregunta fue removida de la base de datos.', 'info');
+        loadTabContent('challenges');
+      }
+    } catch (err) {
+      console.error('Error deleting challenge:', err);
+    }
+  };
+
+  const handleOpenStats = async (id: string) => {
+    setIsLoadingStats(true);
+    setIsStatsModalOpen(true);
+    setSelectedChallengeStats(null);
+    try {
+      const res = await fetchWithAuth(`/api/admin/daily-challenges/${id}/stats`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedChallengeStats(data);
+      } else {
+        onShowToast('Error', 'No se pudieron consultar las estadísticas.', 'error');
+      }
+    } catch (err) {
+      console.error('Error loading challenge stats:', err);
+    } finally {
+      setIsLoadingStats(false);
     }
   };
 
@@ -375,7 +766,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       <nav aria-label="Módulos de administración" className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-slate-200/80">
         {[
           { id: 'overview', label: 'Resumen General', icon: LayoutDashboard },
-          { id: 'users', label: 'Gestión de Usuarios', icon: Users },
+          { id: 'users', label: 'Gestión de Personas', icon: Users },
+          { id: 'constants', label: 'Constantes del Sistema', icon: Database },
+          { id: 'challenges', label: 'Pregunta del Día', icon: MessageSquareQuote },
           { id: 'tests', label: 'Banco de Tests & Preguntas', icon: FileQuestion },
           { id: 'results', label: 'Resultados & Estadísticas', icon: BarChart3 },
           { id: 'config', label: 'Configuración & Auditoría', icon: Settings }
@@ -560,150 +953,395 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Demographics & Recent Users Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Age Distribution & Metrics */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 font-['Outfit',sans-serif]">
+                    Edades y Demografía de Estudiantes
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Promedio general y distribución por rangos de edad
+                  </p>
+                </div>
+                <div className="px-3 py-1.5 rounded-2xl bg-purple-100 text-purple-900 font-bold text-xs flex items-center gap-1 border border-purple-200">
+                  <span>Promedio:</span>
+                  <span className="font-mono text-sm">{overviewData.ageStats?.averageAge || 17} años</span>
+                </div>
+              </div>
+
+              {/* Age Range Progress Bars */}
+              <div className="space-y-3 pt-2">
+                {[
+                  { range: '12-15', label: '12 a 15 años (Secundaria / Exploración)', color: 'from-pink-500 to-rose-500' },
+                  { range: '16-17', label: '16 a 17 años (Bachillerato / Preuniversitario)', color: 'from-purple-500 to-indigo-500' },
+                  { range: '18-20', label: '18 a 20 años (Educación Superior / Jóvenes)', color: 'from-blue-500 to-cyan-500' },
+                  { range: '21-24', label: '21 a 24 años (Especialización / Empleo)', color: 'from-emerald-500 to-teal-500' },
+                  { range: '25+', label: '25 años o más (Reorientación Profesional)', color: 'from-amber-500 to-orange-500' }
+                ].map(item => {
+                  const rangeCount = (overviewData.ageStats?.usersByAgeRange as Record<string, number>)?.[item.range] || 0;
+                  const totalUsers = overviewData.totalUsers || 1;
+                  const pct = Math.round((rangeCount / totalUsers) * 100);
+
+                  return (
+                    <div key={item.range} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+                        <span>{item.label}</span>
+                        <span className="font-mono text-purple-900 font-bold">
+                          {rangeCount} estudiantes ({pct}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full bg-gradient-to-r ${item.color} transition-all duration-700`}
+                          style={{ width: `${Math.max(pct, rangeCount > 0 ? 5 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="p-3 rounded-2xl bg-purple-50/50 border border-purple-100 flex items-center justify-between text-xs text-slate-600">
+                <span>Rango detectado:</span>
+                <span className="font-bold text-purple-900">
+                  Desde los {overviewData.ageStats?.minAge || 14} hasta los {overviewData.ageStats?.maxAge || 24} años
+                </span>
+              </div>
+            </div>
+
+            {/* Recently Registered Users */}
+            <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 font-['Outfit',sans-serif]">
+                    Usuarios Registrados Recientemente
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Últimas cuentas creadas en la plataforma
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('users')}
+                  className="text-xs font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1"
+                >
+                  <span>Ver todos</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 text-xs">
+                {(overviewData.recentUsers && overviewData.recentUsers.length > 0) ? (
+                  overviewData.recentUsers.slice(0, 5).map(ru => (
+                    <div key={ru.id} className="py-2.5 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-pink-400 to-purple-500 text-white font-bold flex items-center justify-center shrink-0 text-xs">
+                          {ru.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 truncate">{ru.name}</p>
+                          <p className="text-[11px] text-slate-400 truncate">{ru.email} • {ru.age} años</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveTab('users');
+                            handleOpenUserDetail(ru.id);
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-[11px] transition-colors"
+                        >
+                          Ver ficha
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-slate-400 py-4 text-center">No hay registros recientes.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {/* =========================================================================
-          TAB 2: GESTIÓN DE USUARIOS
+          TAB 2: GESTIÓN DE PERSONAS / USUARIOS REGISTRADOS (VISTA 1)
           ========================================================================= */}
       {!isLoading && activeTab === 'users' && (
-        <div className="space-y-5 animate-in fade-in duration-200">
-          {/* User Filtering Controls */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                id="admin-search-users-input"
-                type="text"
-                placeholder="Buscar por nombre o correo..."
-                value={userSearchTerm}
-                onChange={e => setUserSearchTerm(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && loadUsers()}
-                className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-purple-400"
-              />
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Summary Metric Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Usuarios</p>
+              <p className="text-2xl font-black text-slate-900 mt-1 font-['Outfit',sans-serif]">{usersList.length}</p>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold">
-                <Filter className="w-3.5 h-3.5" />
-                <span>Filtros:</span>
-              </div>
-              <select
-                id="admin-filter-age"
-                value={userAgeFilter}
-                onChange={e => setUserAgeFilter(e.target.value)}
-                className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-medium text-slate-700"
-              >
-                <option value="all">Todas las edades</option>
-                <option value="12-15">12 a 15 años</option>
-                <option value="16-18">16 a 18 años</option>
-                <option value="19-24">19 a 24 años</option>
-                <option value="25+">25 o más</option>
-              </select>
-
-              <select
-                id="admin-filter-edu"
-                value={userEduFilter}
-                onChange={e => setUserEduFilter(e.target.value)}
-                className="text-xs bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 font-medium text-slate-700 max-w-[160px] truncate"
-              >
-                <option value="all">Todo nivel educativo</option>
-                <option value="Bachillerato">Bachillerato / Secundaria</option>
-                <option value="Pregrado / Universidad">Universidad / Pregrado</option>
-                <option value="Técnico o Tecnológico">Técnico o Tecnológico</option>
-              </select>
-
-              <button
-                id="admin-apply-user-filters-btn"
-                onClick={loadUsers}
-                className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition-all shadow-xs"
-              >
-                Aplicar
-              </button>
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-purple-600">Estudiantes</p>
+              <p className="text-2xl font-black text-purple-700 mt-1 font-['Outfit',sans-serif]">
+                {usersList.filter(u => u.role !== 'admin').length}
+              </p>
+            </div>
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">Administradores</p>
+              <p className="text-2xl font-black text-indigo-700 mt-1 font-['Outfit',sans-serif]">
+                {usersList.filter(u => u.role === 'admin').length}
+              </p>
+            </div>
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Cuentas Activas</p>
+              <p className="text-2xl font-black text-emerald-700 mt-1 font-['Outfit',sans-serif]">
+                {usersList.filter(u => u.status !== 'suspended').length}
+              </p>
             </div>
           </div>
 
-          {/* Interactive Users Table with Horizontal Scroll Protection */}
+          {/* User Filtering Controls Bar */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+              {/* Search by Name or Email */}
+              <div className="relative w-full md:w-96">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  id="admin-search-users-input"
+                  type="text"
+                  placeholder="Buscar por nombre o correo electrónico..."
+                  value={userSearchTerm}
+                  onChange={e => setUserSearchTerm(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && loadUsers()}
+                  className="w-full pl-9 pr-4 py-2.5 text-xs sm:text-sm bg-white border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-purple-400 text-slate-800 placeholder:text-slate-400"
+                />
+              </div>
+
+              {/* Fast Filter Dropdowns */}
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                {/* Role Filter */}
+                <select
+                  id="admin-filter-role"
+                  value={userRoleFilter}
+                  onChange={e => setUserRoleFilter(e.target.value as any)}
+                  className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-700"
+                >
+                  <option value="all">Todos los roles</option>
+                  <option value="user">Solo Estudiantes</option>
+                  <option value="admin">Solo Administradores</option>
+                </select>
+
+                {/* Status Filter */}
+                <select
+                  id="admin-filter-status"
+                  value={userStatusFilter}
+                  onChange={e => setUserStatusFilter(e.target.value as any)}
+                  className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-700"
+                >
+                  <option value="all">Todos los estados</option>
+                  <option value="active">Activos</option>
+                  <option value="suspended">Suspendidos</option>
+                </select>
+
+                {/* Age Filter */}
+                <select
+                  id="admin-filter-age"
+                  value={userAgeFilter}
+                  onChange={e => setUserAgeFilter(e.target.value)}
+                  className="text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 font-medium text-slate-700"
+                >
+                  <option value="all">Todas las edades</option>
+                  <option value="12-15">12 a 15 años</option>
+                  <option value="16-18">16 a 18 años</option>
+                  <option value="19-24">19 a 24 años</option>
+                  <option value="25+">25 o más</option>
+                </select>
+
+                <button
+                  id="admin-apply-user-filters-btn"
+                  onClick={loadUsers}
+                  className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Actualizar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Users Table */}
           <div className="rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="p-3.5 sm:p-4">Estudiante / Usuario</th>
-                    <th className="p-3.5 sm:p-4">Rol & Permisos</th>
-                    <th className="p-3.5 sm:p-4">Edad & Grado</th>
-                    <th className="p-3.5 sm:p-4">Ubicación</th>
-                    <th className="p-3.5 sm:p-4 text-center">Tests Realizados</th>
-                    <th className="p-3.5 sm:p-4 text-center">Favoritos</th>
-                    <th className="p-3.5 sm:p-4 text-right">Acciones</th>
+                    <th className="p-3.5 sm:p-4">Nombre Completo</th>
+                    <th className="p-3.5 sm:p-4">Correo Electrónico</th>
+                    <th className="p-3.5 sm:p-4">Fecha de Registro</th>
+                    <th className="p-3.5 sm:p-4">Rol Actual</th>
+                    <th className="p-3.5 sm:p-4">Estado</th>
+                    <th className="p-3.5 sm:p-4 text-center">Tests</th>
+                    <th className="p-3.5 sm:p-4 text-right">Acciones de Gestión</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {usersList.length === 0 ? (
+                  {usersList
+                    .filter(u => {
+                      if (userRoleFilter !== 'all' && u.role !== userRoleFilter) return false;
+                      if (userStatusFilter !== 'all') {
+                        const st = u.status || 'active';
+                        if (st !== userStatusFilter) return false;
+                      }
+                      return true;
+                    })
+                    .length === 0 ? (
                     <tr>
                       <td colSpan={7} className="text-center p-8 text-slate-400">
-                        No se encontraron usuarios que coincidan con la búsqueda.
+                        No se encontraron usuarios que coincidan con los filtros aplicados.
                       </td>
                     </tr>
                   ) : (
-                    usersList.map(u => (
-                      <tr key={u.id} className="hover:bg-purple-50/40 transition-colors">
-                        <td className="p-3.5 sm:p-4">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-xl ${u.avatarColor || 'bg-gradient-to-tr from-pink-400 to-purple-500'} text-white flex items-center justify-center font-bold text-xs`}>
-                              {u.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-900 leading-tight">{u.name}</p>
-                              <p className="text-[11px] text-slate-500 truncate max-w-[180px] sm:max-w-xs">{u.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-3.5 sm:p-4">
-                          {u.role === 'admin' ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                              <ShieldCheck className="w-3 h-3 text-purple-600" />
-                              <span>Administrador</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-700">
-                              Estudiante
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3.5 sm:p-4">
-                          <p className="font-semibold text-slate-800">{u.age} años</p>
-                          <p className="text-[10px] text-slate-500 truncate max-w-[140px]">{u.educationLevel}</p>
-                        </td>
-                        <td className="p-3.5 sm:p-4">
-                          <p className="text-slate-700">{u.city || 'No especificada'}</p>
-                          <p className="text-[10px] text-slate-400">{u.country}</p>
-                        </td>
-                        <td className="p-3.5 sm:p-4 text-center font-bold text-purple-700">
-                          {u.testsCount}
-                        </td>
-                        <td className="p-3.5 sm:p-4 text-center font-bold text-pink-600">
-                          {u.savedCareersCount}
-                        </td>
-                        <td className="p-3.5 sm:p-4 text-right">
-                          <button
-                            id={`admin-view-user-${u.id}`}
-                            onClick={() => handleOpenUserDetail(u.id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-xs transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Ver Ficha</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    usersList
+                      .filter(u => {
+                        if (userRoleFilter !== 'all' && u.role !== userRoleFilter) return false;
+                        if (userStatusFilter !== 'all') {
+                          const st = u.status || 'active';
+                          if (st !== userStatusFilter) return false;
+                        }
+                        return true;
+                      })
+                      .map(u => {
+                        const isSuspended = u.status === 'suspended';
+                        return (
+                          <tr key={u.id} className="hover:bg-purple-50/40 transition-colors">
+                            {/* Column 1: Nombre */}
+                            <td className="p-3.5 sm:p-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-9 h-9 rounded-2xl ${u.avatarColor || 'bg-gradient-to-tr from-pink-400 to-purple-500'} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs`}>
+                                  {u.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-900 leading-tight truncate">{u.name}</p>
+                                  <p className="text-[10px] text-slate-400">{u.city || 'Colombia'} • {u.age || 17} años</p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Column 2: Correo electrónico */}
+                            <td className="p-3.5 sm:p-4 font-mono text-[11px] text-slate-600">
+                              <span className="truncate max-w-[200px] block" title={u.email}>
+                                {u.email}
+                              </span>
+                            </td>
+
+                            {/* Column 3: Fecha de registro */}
+                            <td className="p-3.5 sm:p-4 text-slate-600 text-[11px]">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>{formatDate(u.createdAt)}</span>
+                              </div>
+                            </td>
+
+                            {/* Column 4: Rol actual */}
+                            <td className="p-3.5 sm:p-4">
+                              {u.role === 'admin' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200 shadow-xs">
+                                  <ShieldCheck className="w-3 h-3 text-purple-700" />
+                                  <span>Administrador</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                  <Users className="w-3 h-3 text-slate-500" />
+                                  <span>Estudiante</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Column 5: Estado de la cuenta */}
+                            <td className="p-3.5 sm:p-4">
+                              {isSuspended ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  <UserX className="w-3 h-3 text-rose-600" />
+                                  <span>Suspendida</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Activa</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Column 6: Tests */}
+                            <td className="p-3.5 sm:p-4 text-center font-bold text-purple-700 font-mono">
+                              {u.testsCount}
+                            </td>
+
+                            {/* Column 7: Acciones */}
+                            <td className="p-3.5 sm:p-4 text-right">
+                              <div className="inline-flex items-center gap-1 sm:gap-1.5">
+                                {/* Ver Ficha */}
+                                <button
+                                  id={`admin-user-view-${u.id}`}
+                                  type="button"
+                                  onClick={() => handleOpenUserDetail(u.id)}
+                                  className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold transition-colors"
+                                  title="Ver ficha completa y resultados"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Cambiar Rol */}
+                                <button
+                                  id={`admin-user-role-${u.id}`}
+                                  type="button"
+                                  onClick={() => setUserToChangeRole(u)}
+                                  className="px-2 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold text-[11px] transition-colors flex items-center gap-1"
+                                  title="Cambiar rol entre Estudiante y Administrador"
+                                >
+                                  <ShieldCheck className="w-3 h-3" />
+                                  <span className="hidden sm:inline">Rol</span>
+                                </button>
+
+                                {/* Toggle Estado (Activar/Desactivar) */}
+                                <button
+                                  id={`admin-user-status-${u.id}`}
+                                  type="button"
+                                  onClick={() => handleToggleUserStatus(u)}
+                                  className={`p-1.5 rounded-xl transition-colors ${
+                                    isSuspended
+                                      ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                                      : 'bg-amber-50 hover:bg-amber-100 text-amber-700'
+                                  }`}
+                                  title={isSuspended ? 'Habilitar cuenta' : 'Desactivar o suspender cuenta'}
+                                >
+                                  {isSuspended ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                                </button>
+
+                                {/* Eliminar Usuario */}
+                                <button
+                                  id={`admin-user-delete-${u.id}`}
+                                  type="button"
+                                  onClick={() => setUserToDelete(u)}
+                                  className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition-colors"
+                                  title="Eliminar usuario de la plataforma"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                   )}
                 </tbody>
               </table>
             </div>
           </div>
 
-          {/* User Detail Modal */}
+          {/* Modal 1: User Detail Profile */}
           {selectedUserDetail && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
               <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 space-y-5">
@@ -714,7 +1352,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     </div>
                     <div>
                       <h3 className="font-bold text-lg text-slate-900">{selectedUserDetail.name}</h3>
-                      <p className="text-xs text-slate-500">{selectedUserDetail.email} • Rol: <strong>{selectedUserDetail.role}</strong></p>
+                      <p className="text-xs text-slate-500">{selectedUserDetail.email} • Rol: <strong className="text-purple-700">{selectedUserDetail.role}</strong></p>
                     </div>
                   </div>
                   <button
@@ -744,7 +1382,6 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* Test History inside detail */}
                 <div className="space-y-3">
                   <h4 className="font-bold text-sm text-slate-800">Historial de Evaluaciones</h4>
                   {selectedUserDetail.testHistory?.length === 0 ? (
@@ -777,6 +1414,935 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     Cerrar Ficha
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 2: Change Role Confirmation */}
+          {userToChangeRole && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">Modificar Rol de Usuario</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Usuario: <strong className="text-slate-800">{userToChangeRole.name}</strong> ({userToChangeRole.email})
+                  </p>
+                  <p className="text-xs text-slate-600 mt-2">
+                    Rol actual: <span className="font-bold uppercase text-purple-700">{userToChangeRole.role}</span>.
+                    Selecciona el nuevo rol a asignar en la base de datos:
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleChangeUserRole(userToChangeRole, 'user')}
+                    className={`p-3 rounded-2xl border text-xs font-bold transition-all text-left ${
+                      userToChangeRole.role === 'user'
+                        ? 'border-purple-600 bg-purple-50 text-purple-900'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <p className="font-bold">Estudiante</p>
+                    <p className="text-[10px] text-slate-500 font-normal mt-0.5">Acceso al test, carreras y perfil vocacional.</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleChangeUserRole(userToChangeRole, 'admin')}
+                    className={`p-3 rounded-2xl border text-xs font-bold transition-all text-left ${
+                      userToChangeRole.role === 'admin'
+                        ? 'border-purple-600 bg-purple-50 text-purple-900'
+                        : 'border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <p className="font-bold text-indigo-700">Administrador</p>
+                    <p className="text-[10px] text-slate-500 font-normal mt-0.5">Acceso al panel /admin, métricas y constantes.</p>
+                  </button>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setUserToChangeRole(null)}
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal 3: Delete User Confirmation */}
+          {userToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">¿Eliminar Usuario de la Plataforma?</h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    Esta acción eliminará de forma irreversible a <strong className="text-slate-900">{userToDelete.name}</strong> ({userToDelete.email}), incluyendo sus evaluaciones vocacionales y favoritos.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setUserToDelete(null)}
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteUser(userToDelete)}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md"
+                  >
+                    Confirmar Eliminación
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: GESTIÓN DE CONSTANTES / DATOS DEL SISTEMA (VISTA 2)
+          ========================================================================= */}
+      {!isLoading && activeTab === 'constants' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Header Card & Actions */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-xl bg-purple-100 text-purple-700">
+                  <Database className="w-4 h-4" />
+                </span>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-900 font-['Outfit',sans-serif]">
+                  Constantes y Parámetros Globales del Sistema
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 max-w-2xl">
+                Monitorea, edita y agrega en tiempo real las variables operativas, parámetros del algoritmo RIASEC, límites de sesión y directivas de la aplicación web.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full md:w-auto">
+              <button
+                id="admin-reload-constants-btn"
+                type="button"
+                onClick={loadConstants}
+                className="px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5"
+                title="Recargar constantes desde la base de datos"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refrescar</span>
+              </button>
+
+              <button
+                id="admin-create-constant-btn"
+                type="button"
+                onClick={handleOpenNewConstantModal}
+                className="px-4 py-2 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Nueva Constante</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filtering and Search for Constants */}
+          <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
+            <div className="relative w-full md:w-96">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                id="admin-search-constants-input"
+                type="text"
+                placeholder="Buscar constante por clave, descripción o valor..."
+                value={constantSearchTerm}
+                onChange={e => setConstantSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-xs sm:text-sm bg-white border border-slate-200 rounded-2xl focus:outline-hidden focus:ring-2 focus:ring-purple-400 text-slate-800"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto no-scrollbar">
+              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Categoría:</span>
+              {[
+                { id: 'all', label: 'Todas' },
+                { id: 'vocational', label: 'Vocacional' },
+                { id: 'security', label: 'Seguridad' },
+                { id: 'platform', label: 'Plataforma' },
+                { id: 'limits', label: 'Límites' },
+                { id: 'notifications', label: 'Notificaciones' }
+              ].map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setConstantCategoryFilter(cat.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    constantCategoryFilter === cat.id
+                      ? 'bg-purple-700 text-white shadow-xs'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Interactive Constants Table */}
+          <div className="rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200/80 bg-slate-50/70 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                    <th className="p-3.5 sm:p-4">Clave del Sistema (Key)</th>
+                    <th className="p-3.5 sm:p-4">Categoría</th>
+                    <th className="p-3.5 sm:p-4">Tipo</th>
+                    <th className="p-3.5 sm:p-4">Valor Actual</th>
+                    <th className="p-3.5 sm:p-4">Descripción y Propósito</th>
+                    <th className="p-3.5 sm:p-4">Última Actualización</th>
+                    <th className="p-3.5 sm:p-4 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {constantsList
+                    .filter(c => {
+                      if (constantCategoryFilter !== 'all' && c.category !== constantCategoryFilter) return false;
+                      if (constantSearchTerm.trim()) {
+                        const term = constantSearchTerm.toLowerCase();
+                        if (
+                          !c.key.toLowerCase().includes(term) &&
+                          !c.description.toLowerCase().includes(term) &&
+                          !String(c.value).toLowerCase().includes(term)
+                        ) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    })
+                    .length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center p-8 text-slate-400">
+                        No se encontraron constantes que coincidan con la búsqueda.
+                      </td>
+                    </tr>
+                  ) : (
+                    constantsList
+                      .filter(c => {
+                        if (constantCategoryFilter !== 'all' && c.category !== constantCategoryFilter) return false;
+                        if (constantSearchTerm.trim()) {
+                          const term = constantSearchTerm.toLowerCase();
+                          if (
+                            !c.key.toLowerCase().includes(term) &&
+                            !c.description.toLowerCase().includes(term) &&
+                            !String(c.value).toLowerCase().includes(term)
+                          ) {
+                            return false;
+                          }
+                        }
+                        return true;
+                      })
+                      .map(c => {
+                        const categoryBadgeColors: Record<string, string> = {
+                          vocational: 'bg-purple-100 text-purple-900 border-purple-200',
+                          security: 'bg-rose-100 text-rose-900 border-rose-200',
+                          platform: 'bg-blue-100 text-blue-900 border-blue-200',
+                          limits: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+                          notifications: 'bg-amber-100 text-amber-900 border-amber-200'
+                        };
+                        const badgeClass = categoryBadgeColors[c.category] || 'bg-slate-100 text-slate-800 border-slate-200';
+
+                        return (
+                          <tr key={c.key} className="hover:bg-purple-50/40 transition-colors">
+                            {/* Key */}
+                            <td className="p-3.5 sm:p-4 font-mono font-bold text-slate-900">
+                              <span className="px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200 text-purple-900">
+                                {c.key}
+                              </span>
+                            </td>
+
+                            {/* Category */}
+                            <td className="p-3.5 sm:p-4">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize ${badgeClass}`}>
+                                {c.category}
+                              </span>
+                            </td>
+
+                            {/* Type */}
+                            <td className="p-3.5 sm:p-4 font-mono text-[10px] text-slate-500 uppercase">
+                              {c.dataType}
+                            </td>
+
+                            {/* Value */}
+                            <td className="p-3.5 sm:p-4">
+                              <span className="font-mono font-bold text-xs text-indigo-900 bg-indigo-50/80 px-2 py-1 rounded-md border border-indigo-100">
+                                {c.value}
+                              </span>
+                            </td>
+
+                            {/* Description */}
+                            <td className="p-3.5 sm:p-4 text-slate-600 max-w-xs truncate" title={c.description}>
+                              {c.description || 'Sin descripción'}
+                            </td>
+
+                            {/* Updated */}
+                            <td className="p-3.5 sm:p-4 text-[11px] text-slate-500">
+                              <p>{formatDate(c.updatedAt)}</p>
+                              {c.updatedBy && <p className="text-[10px] text-slate-400">Por: {c.updatedBy}</p>}
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3.5 sm:p-4 text-right">
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  id={`admin-edit-constant-${c.key}`}
+                                  type="button"
+                                  onClick={() => handleOpenEditConstantModal(c)}
+                                  className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold transition-colors"
+                                  title="Editar constante"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  id={`admin-delete-constant-${c.key}`}
+                                  type="button"
+                                  onClick={() => setConstantToDelete(c)}
+                                  className="p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition-colors"
+                                  title="Eliminar constante"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Modal: Create or Edit Constant Form */}
+          {isConstantModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <form onSubmit={handleSaveConstant} className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-2xl bg-purple-100 text-purple-700">
+                      <Key className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-lg text-slate-900">
+                        {isEditingConstant ? 'Modificar Constante del Sistema' : 'Nueva Constante Global'}
+                      </h3>
+                      <p className="text-xs text-slate-500">Parámetro sincronizado en tiempo real con la base de datos</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsConstantModalOpen(false)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  {/* Key */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Clave / Identificador (Key) *
+                    </label>
+                    <input
+                      type="text"
+                      disabled={isEditingConstant}
+                      value={constantFormData.key}
+                      onChange={e => setConstantFormData(prev => ({ ...prev, key: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_') }))}
+                      placeholder="EJ: MIN_VOCATIONAL_MATCH_PERCENTAGE"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs focus:ring-2 focus:ring-purple-400 focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-500"
+                      required
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Letras mayúsculas, números y guiones bajos únicamente.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Category */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Categoría</label>
+                      <select
+                        value={constantFormData.category}
+                        onChange={e => setConstantFormData(prev => ({ ...prev, category: e.target.value as any }))}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+                      >
+                        <option value="vocational">Vocacional & Algoritmo</option>
+                        <option value="security">Seguridad & Sesión</option>
+                        <option value="platform">Plataforma & UI</option>
+                        <option value="limits">Límites & Cuotas</option>
+                        <option value="notifications">Notificaciones</option>
+                      </select>
+                    </div>
+
+                    {/* Data Type */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Tipo de Dato</label>
+                      <select
+                        value={constantFormData.dataType}
+                        onChange={e => setConstantFormData(prev => ({ ...prev, dataType: e.target.value as any }))}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono"
+                      >
+                        <option value="string">String (Texto)</option>
+                        <option value="number">Number (Numérico)</option>
+                        <option value="boolean">Boolean (true / false)</option>
+                        <option value="json">JSON (Estructura)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Value */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Valor Actual *
+                    </label>
+                    <input
+                      type="text"
+                      value={constantFormData.value}
+                      onChange={e => setConstantFormData(prev => ({ ...prev, value: e.target.value }))}
+                      placeholder="Valor del parámetro..."
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:ring-2 focus:ring-purple-400 focus:outline-hidden"
+                      required
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Descripción y Propósito Funcional
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={constantFormData.description}
+                      onChange={e => setConstantFormData(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Explica qué regla o comportamiento controla esta constante en la aplicación..."
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-400 focus:outline-hidden resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsConstantModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingConstant}
+                    className="px-4 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingConstant ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                    <span>Guardar Constante</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Modal: Delete Constant Confirmation */}
+          {constantToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">¿Eliminar Constante del Sistema?</h3>
+                  <p className="text-xs text-slate-600 mt-1">
+                    ¿Estás seguro de que deseas eliminar la constante <strong className="font-mono text-purple-900">{constantToDelete.key}</strong>?
+                    Los módulos que dependan de este valor adoptarán su comportamiento predeterminado.
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setConstantToDelete(null)}
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold text-xs"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteConstant(constantToDelete)}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md"
+                  >
+                    Eliminar Parámetro
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: PREGUNTA O DINÁMICA DEL DÍA
+          ========================================================================= */}
+      {!isLoading && activeTab === 'challenges' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Quick Stats for Daily Challenges */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Preguntas Creadas</p>
+                <h3 className="text-2xl font-black text-purple-700 mt-1 font-['Outfit',sans-serif]">
+                  {challengesList.length}
+                </h3>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                <MessageSquareQuote className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Dinámica Activa</p>
+                <h3 className="text-base font-black text-emerald-700 mt-1 truncate max-w-[200px] font-['Outfit',sans-serif]">
+                  {challengesList.some(c => c.active === 1 || c.active === true) ? 'Publicada en Inicio' : 'Sin publicar'}
+                </h3>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="p-4 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total de Respuestas</p>
+                <h3 className="text-2xl font-black text-pink-700 mt-1 font-['Outfit',sans-serif]">
+                  {challengesList.reduce((acc, c) => acc + (c.totalVotes || 0), 0)}
+                </h3>
+              </div>
+              <div className="w-10 h-10 rounded-2xl bg-pink-100 text-pink-600 flex items-center justify-center">
+                <Vote className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* Action Header Card */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-xs">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 font-['Outfit',sans-serif] flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-purple-600" />
+                <span>Gestor de Dinámica o Pregunta del Día</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5 max-w-2xl">
+                Crea preguntas interactivas para que los estudiantes participen diariamente, consulta las estadísticas de votos en tiempo real y administra las opciones de respuesta.
+              </p>
+            </div>
+
+            <button
+              id="admin-create-challenge-btn"
+              type="button"
+              onClick={handleOpenCreateChallenge}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white text-xs font-bold transition-all shadow-md shadow-purple-900/20 active:scale-95 shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Crear Pregunta del Día</span>
+            </button>
+          </div>
+
+          {/* Challenges List */}
+          {challengesList.length === 0 ? (
+            <div className="p-8 text-center rounded-3xl bg-white/60 backdrop-blur-md border border-white/80 space-y-3">
+              <MessageSquareQuote className="w-10 h-10 text-purple-300 mx-auto" />
+              <p className="font-bold text-slate-700 text-sm">No hay dinámicas del día registradas.</p>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Crea la primera pregunta interactiva para que los estudiantes compartan sus intereses vocacionales al ingresar a VocAcción.
+              </p>
+              <button
+                onClick={handleOpenCreateChallenge}
+                className="px-4 py-2 rounded-xl bg-purple-100 hover:bg-purple-200 text-purple-800 text-xs font-bold transition-colors"
+              >
+                Crear primera pregunta
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {challengesList.map(ch => {
+                const isActive = ch.active === 1 || ch.active === true;
+                const opts: string[] = Array.isArray(ch.options) ? ch.options : [];
+                const votes = ch.totalVotes || 0;
+
+                return (
+                  <div
+                    key={ch.id}
+                    className={`p-5 sm:p-6 rounded-3xl bg-white/80 backdrop-blur-xl border transition-all space-y-4 shadow-xs ${
+                      isActive ? 'border-purple-300 ring-2 ring-purple-400/20' : 'border-slate-200/80 opacity-90'
+                    }`}
+                  >
+                    {/* Card Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                            <span>Publicada (Activa)</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            Pausada (Inactiva)
+                          </span>
+                        )}
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          ID: {ch.id}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="px-2.5 py-1 rounded-full bg-purple-50 text-purple-800 font-bold border border-purple-100 flex items-center gap-1">
+                          <Vote className="w-3.5 h-3.5" />
+                          <span>{votes} voto{votes === 1 ? '' : 's'}</span>
+                        </span>
+                        <span className="text-slate-400 text-[11px]">
+                          {new Date(ch.created_at || ch.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Question Content */}
+                    <div>
+                      <h4 className="text-base sm:text-lg font-bold text-slate-900 font-['Outfit',sans-serif] leading-snug">
+                        {ch.question}
+                      </h4>
+                    </div>
+
+                    {/* Options list preview */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      {opts.map((opt, idx) => {
+                        const stat = ch.stats?.find((s: any) => s.option === opt);
+                        const pct = stat ? stat.percentage : 0;
+                        const vCount = stat ? stat.votes : 0;
+
+                        return (
+                          <div
+                            key={idx}
+                            className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2"
+                          >
+                            <span className="text-slate-700 truncate font-medium">
+                              <strong className="text-purple-700 mr-1.5">{String.fromCharCode(65 + idx)}.</strong>
+                              {opt}
+                            </span>
+                            {votes > 0 && (
+                              <span className="text-[11px] font-bold text-purple-800 shrink-0 font-mono">
+                                {pct}% ({vCount})
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* View Stats & Responses Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenStats(ch.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-xs transition-colors"
+                        >
+                          <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Ver Respuestas & Estadísticas</span>
+                        </button>
+
+                        {/* Edit Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditChallenge(ch)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-slate-600" />
+                          <span>Modificar</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Toggle Active Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleChallengeActive(ch.id, isActive)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                            isActive
+                              ? 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          <span>{isActive ? 'Pausar dinámica' : 'Publicar en inicio'}</span>
+                        </button>
+
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChallenge(ch.id)}
+                          className="p-1.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                          title="Eliminar dinámica"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Modal to Create or Edit Challenge */}
+          {isChallengeModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2 text-slate-900 font-bold">
+                    <MessageSquareQuote className="w-5 h-5 text-purple-600" />
+                    <span>{editingChallengeId ? 'Modificar Pregunta del Día' : 'Crear Nueva Pregunta del Día'}</span>
+                  </div>
+                  <button
+                    onClick={() => setIsChallengeModalOpen(false)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveChallenge} className="space-y-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Enunciado / Pregunta para los estudiantes *
+                    </label>
+                    <textarea
+                      id="admin-challenge-question-input"
+                      rows={3}
+                      value={challengeQuestion}
+                      onChange={e => setChallengeQuestion(e.target.value)}
+                      placeholder="Ej. Si pudieras resolver un gran reto para el mundo en los próximos 10 años, ¿en qué área te gustaría trabajar?"
+                      className="w-full p-3 rounded-2xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-purple-400 text-xs sm:text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-slate-700 block">
+                        Opciones de respuesta (mínimo 2, máximo 6) *
+                      </label>
+                      {challengeOptions.length < 6 && (
+                        <button
+                          type="button"
+                          onClick={handleAddOptionField}
+                          className="text-[11px] font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Añadir opción</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {challengeOptions.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-xs shrink-0">
+                            {String.fromCharCode(65 + idx)}
+                          </span>
+                          <input
+                            type="text"
+                            value={opt}
+                            onChange={e => handleOptionChange(idx, e.target.value)}
+                            placeholder={`Opción ${String.fromCharCode(65 + idx)}`}
+                            className="flex-1 p-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-300"
+                            required
+                          />
+                          {challengeOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveOptionField(idx)}
+                              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                              title="Quitar opción"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-purple-50/60 border border-purple-100 flex items-center gap-3">
+                    <input
+                      id="admin-challenge-active-checkbox"
+                      type="checkbox"
+                      checked={challengeActive}
+                      onChange={e => setChallengeActive(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 rounded-md focus:ring-purple-500 cursor-pointer"
+                    />
+                    <label htmlFor="admin-challenge-active-checkbox" className="text-xs text-slate-700 cursor-pointer select-none">
+                      <strong className="block text-slate-900">Publicar inmediatamente como activa</strong>
+                      <span>Aparecerá en el inicio para todos los estudiantes.</span>
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsChallengeModalOpen(false)}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      id="admin-save-challenge-submit-btn"
+                      type="submit"
+                      disabled={isSavingChallenge}
+                      className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold transition-all shadow-md shadow-purple-900/20 active:scale-95"
+                    >
+                      {isSavingChallenge ? 'Guardando...' : (editingChallengeId ? 'Guardar Cambios' : 'Publicar Dinámica')}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal to View Stats and Individual Student Responses */}
+          {isStatsModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg text-slate-900 font-['Outfit',sans-serif]">
+                      Estadísticas y Respuestas de Estudiantes
+                    </h3>
+                    <p className="text-xs text-slate-500">Métricas acumuladas y desglose individual de votos</p>
+                  </div>
+                  <button
+                    onClick={() => setIsStatsModalOpen(false)}
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {isLoadingStats ? (
+                  <div className="p-8 text-center text-purple-700 text-sm font-semibold flex items-center justify-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-purple-600" />
+                    <span>Consultando votos en la base de datos...</span>
+                  </div>
+                ) : selectedChallengeStats ? (
+                  <div className="space-y-5 text-xs">
+                    {/* Question Summary */}
+                    <div className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                        Pregunta
+                      </span>
+                      <p className="text-slate-900 font-bold text-sm leading-snug">
+                        {selectedChallengeStats.challenge?.question}
+                      </p>
+                      <div className="flex items-center gap-3 pt-1 text-slate-500 text-[11px]">
+                        <span>Total de votos: <strong className="text-purple-800">{selectedChallengeStats.totalVotes}</strong></span>
+                        <span>Estado: <strong className={selectedChallengeStats.challenge?.active ? 'text-emerald-600' : 'text-slate-600'}>
+                          {selectedChallengeStats.challenge?.active ? 'Activa' : 'Pausada'}
+                        </strong></span>
+                      </div>
+                    </div>
+
+                    {/* Option Percentages Graphic Breakdown */}
+                    <div className="space-y-3">
+                      <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                        <BarChart2 className="w-4 h-4 text-purple-600" />
+                        <span>Distribución de Respuestas (%)</span>
+                      </h4>
+
+                      <div className="space-y-2.5">
+                        {selectedChallengeStats.stats?.map((st: any, idx: number) => (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-slate-700">
+                                {String.fromCharCode(65 + idx)}. {st.option}
+                              </span>
+                              <span className="font-bold text-purple-800 font-mono">
+                                {st.percentage}% ({st.votes} votos)
+                              </span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-pink-500 to-purple-600 rounded-full transition-all duration-500"
+                                style={{ width: `${st.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Table of Individual Student Votes */}
+                    <div className="space-y-2 pt-2 border-t border-slate-100">
+                      <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-purple-600" />
+                        <span>Detalle de Participaciones ({selectedChallengeStats.votes?.length || 0})</span>
+                      </h4>
+
+                      {(!selectedChallengeStats.votes || selectedChallengeStats.votes.length === 0) ? (
+                        <p className="text-slate-400 py-3 text-center">Aún no se registran respuestas para esta pregunta.</p>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto rounded-2xl border border-slate-100 divide-y divide-slate-100">
+                          {selectedChallengeStats.votes.map((v: any, vIdx: number) => (
+                            <div key={vIdx} className="p-3 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors">
+                              <div>
+                                <p className="font-bold text-slate-900 leading-tight">
+                                  {v.userName}
+                                </p>
+                                <p className="text-[11px] text-slate-500">
+                                  {v.userEmail || 'Estudiante visitante'}
+                                </p>
+                              </div>
+
+                              <div className="text-right">
+                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800">
+                                  {v.optionText}
+                                </span>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  {new Date(v.votedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(v.votedAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button
+                        onClick={() => setIsStatsModalOpen(false)}
+                        className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs"
+                      >
+                        Cerrar Estadísticas
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-slate-500 py-4 text-center">No se encontraron datos.</p>
+                )}
               </div>
             </div>
           )}

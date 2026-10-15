@@ -9,6 +9,7 @@ export interface UserResponse {
   id: string;
   email: string;
   role: 'admin' | 'user';
+  status?: 'active' | 'suspended';
   name: string;
   age: number;
   educationLevel: string;
@@ -117,11 +118,47 @@ export function getDb(): DatabaseSync {
       details TEXT,
       timestamp TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS daily_challenges (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      options TEXT NOT NULL,
+      active INTEGER DEFAULT 1,
+      created_by TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS daily_challenge_votes (
+      id TEXT PRIMARY KEY,
+      challenge_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      user_email TEXT,
+      selected_option_index INTEGER NOT NULL,
+      voted_at TEXT NOT NULL,
+      UNIQUE(challenge_id, user_id),
+      FOREIGN KEY(challenge_id) REFERENCES daily_challenges(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS system_constants (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'platform',
+      description TEXT NOT NULL DEFAULT '',
+      data_type TEXT NOT NULL DEFAULT 'string',
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );
   `);
 
-  // Safe migration: Add role column if DB existed prior to this update
+  // Safe migration: Add role and status columns if DB existed prior to this update
   try {
     dbInstance.exec(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';`);
+  } catch (_) {
+    // Column already exists
+  }
+  try {
+    dbInstance.exec(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active';`);
   } catch (_) {
     // Column already exists
   }
@@ -132,7 +169,142 @@ export function getDb(): DatabaseSync {
   // Seed / ensure Authorized Admin Accounts
   seedAdminAccounts(dbInstance);
 
+  // Seed initial Daily Challenge
+  seedInitialDailyChallenge(dbInstance);
+
+  // Seed initial System Constants
+  seedSystemConstants(dbInstance);
+
   return dbInstance;
+}
+
+function seedInitialDailyChallenge(db: DatabaseSync) {
+  try {
+    const countRow = db.prepare('SELECT COUNT(*) as count FROM daily_challenges').get() as any;
+    if (!countRow || countRow.count === 0) {
+      const id = 'challenge-init-1';
+      const now = new Date().toISOString();
+      const options = JSON.stringify([
+        'Lo que verdaderamente me apasiona y disfruto hacer cada día',
+        'Buenas oportunidades laborales y salario atractivo en el mercado',
+        'Poder ayudar a las personas y generar un impacto positivo en la sociedad',
+        'Tener un buen balance entre mi vida laboral, personal y familiar'
+      ]);
+      db.prepare(`
+        INSERT INTO daily_challenges (id, question, options, active, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, 1, 'admin', ?, ?)
+      `).run(
+        id,
+        '¿Qué factor consideras más decisivo al momento de elegir tu carrera profesional?',
+        options,
+        now,
+        now
+      );
+
+      // Realistic seed votes so user sees instant engaging statistics
+      const seedVotes = [
+        { id: 'v1', opt: 0, email: 'estudiante1@colegio.edu' },
+        { id: 'v2', opt: 0, email: 'estudiante2@colegio.edu' },
+        { id: 'v3', opt: 1, email: 'estudiante3@colegio.edu' },
+        { id: 'v4', opt: 2, email: 'estudiante4@colegio.edu' },
+        { id: 'v5', opt: 3, email: 'estudiante5@colegio.edu' },
+        { id: 'v6', opt: 0, email: 'estudiante6@colegio.edu' },
+        { id: 'v7', opt: 1, email: 'estudiante7@colegio.edu' },
+        { id: 'v8', opt: 2, email: 'estudiante8@colegio.edu' },
+      ];
+      for (const v of seedVotes) {
+        db.prepare(`
+          INSERT OR IGNORE INTO daily_challenge_votes (id, challenge_id, user_id, user_email, selected_option_index, voted_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run(v.id, id, v.id, v.email, v.opt, now);
+      }
+    }
+  } catch (err) {
+    console.error('Error seeding initial daily challenge:', err);
+  }
+}
+
+function seedSystemConstants(db: DatabaseSync) {
+  try {
+    const countRow = db.prepare('SELECT COUNT(*) as count FROM system_constants').get() as any;
+    if (!countRow || countRow.count === 0) {
+      const now = new Date().toISOString();
+      const initialConstants = [
+        {
+          key: 'MIN_VOCATIONAL_MATCH_PERCENTAGE',
+          value: '55',
+          category: 'vocational',
+          description: 'Porcentaje mínimo de afinidad para recomendar una carrera al estudiante',
+          data_type: 'number'
+        },
+        {
+          key: 'RIASEC_WEIGHT_ALGORITHM',
+          value: 'balanced',
+          category: 'vocational',
+          description: 'Modelo de cálculo para dimensiones de Holland (balanced, intensive o conservative)',
+          data_type: 'string'
+        },
+        {
+          key: 'MAX_COMPARE_CAREERS_LIMIT',
+          value: '3',
+          category: 'limits',
+          description: 'Límite máximo de carreras que un usuario puede añadir al comparador interactivo',
+          data_type: 'number'
+        },
+        {
+          key: 'SESSION_EXPIRATION_HOURS',
+          value: '72',
+          category: 'security',
+          description: 'Tiempo de vida en horas del token de sesión autenticada',
+          data_type: 'number'
+        },
+        {
+          key: 'ALLOW_GUEST_TEST_EXPLORATION',
+          value: 'true',
+          category: 'platform',
+          description: 'Permite a visitantes sin cuenta resolver un test preliminar antes de registrarse',
+          data_type: 'boolean'
+        },
+        {
+          key: 'TTS_SPEECH_DEFAULT_RATE',
+          value: '0.95',
+          category: 'platform',
+          description: 'Velocidad de locución predeterminada para el motor de voz (0.5 a 1.5)',
+          data_type: 'number'
+        },
+        {
+          key: 'PLATFORM_STATUS_BANNER',
+          value: 'operational',
+          category: 'platform',
+          description: 'Estado global del servicio: operational, maintenance o admissions_active',
+          data_type: 'string'
+        },
+        {
+          key: 'DAILY_CHALLENGE_MAX_OPTIONS',
+          value: '4',
+          category: 'limits',
+          description: 'Número máximo de opciones permitidas al crear una pregunta del día',
+          data_type: 'number'
+        },
+        {
+          key: 'ENABLE_COMMUNITY_NOTIFICATIONS',
+          value: 'true',
+          category: 'notifications',
+          description: 'Activar notificaciones sobre nuevas becas, fechas ICFES y ferias universitarias',
+          data_type: 'boolean'
+        }
+      ];
+
+      for (const c of initialConstants) {
+        db.prepare(`
+          INSERT INTO system_constants (key, value, category, description, data_type, updated_at, updated_by)
+          VALUES (?, ?, ?, ?, ?, ?, 'system')
+        `).run(c.key, c.value, c.category, c.description, c.data_type, now);
+      }
+    }
+  } catch (err) {
+    console.error('Error seeding system constants:', err);
+  }
 }
 
 function seedAdminAccounts(db: DatabaseSync) {
@@ -302,6 +474,7 @@ export function buildUserResponse(userId: string): UserResponse | null {
     id: userRow.id,
     email: userRow.email,
     role: isAdm ? 'admin' : 'user',
+    status: userRow.status || 'active',
     name: userRow.name,
     age: userRow.age || 17,
     educationLevel: userRow.education_level || 'Último año de Bachillerato / Secundaria',
@@ -421,11 +594,18 @@ export function loginDbUser(
   const db = getDb();
   const cleanEmail = email.trim().toLowerCase();
 
-  const userRow = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(cleanEmail) as any;
+  const userRow = db.prepare('SELECT id, password_hash, status FROM users WHERE email = ?').get(cleanEmail) as any;
   if (!userRow) {
     return {
       user: null,
       error: 'Correo o contraseña incorrectos. Verifica tus credenciales o crea una cuenta nueva.'
+    };
+  }
+
+  if (userRow.status === 'suspended') {
+    return {
+      user: null,
+      error: 'Esta cuenta ha sido suspendida temporalmente por un administrador. Contacta a soporte para más información.'
     };
   }
 
@@ -753,6 +933,56 @@ export function getAdminOverviewData() {
     }
   }
 
+  // 6. User ages analysis (Exact requirement from user: Edades de los usuarios, cantidad por rango de edad)
+  const userAges = db.prepare('SELECT age FROM users WHERE age IS NOT NULL').all() as any[];
+  const ageCounts: Record<number, number> = {};
+  const usersByAgeRange: Record<string, number> = {
+    '12-15': 0,
+    '16-17': 0,
+    '18-20': 0,
+    '21-24': 0,
+    '25+': 0
+  };
+  let sumAge = 0;
+  let validAgeCount = 0;
+  let minAge = 99;
+  let maxAge = 0;
+
+  for (const row of userAges) {
+    const age = Number(row.age);
+    if (!isNaN(age) && age > 0) {
+      validAgeCount++;
+      sumAge += age;
+      if (age < minAge) minAge = age;
+      if (age > maxAge) maxAge = age;
+      ageCounts[age] = (ageCounts[age] || 0) + 1;
+
+      if (age <= 15) usersByAgeRange['12-15']++;
+      else if (age <= 17) usersByAgeRange['16-17']++;
+      else if (age <= 20) usersByAgeRange['18-20']++;
+      else if (age <= 24) usersByAgeRange['21-24']++;
+      else usersByAgeRange['25+']++;
+    }
+  }
+
+  const averageAge = validAgeCount > 0 ? Math.round((sumAge / validAgeCount) * 10) / 10 : 17;
+  const allAgesList = Object.entries(ageCounts)
+    .map(([a, c]) => ({ age: Number(a), count: c }))
+    .sort((a, b) => a.age - b.age);
+
+  // 7. Recent users (last 10 registered)
+  const recentUsers = db.prepare(`
+    SELECT u.id, u.name, u.email, u.age, u.city, u.education_level, u.created_at,
+      (SELECT COUNT(*) FROM user_tests t WHERE t.user_id = u.id) as tests_count
+    FROM users u
+    ORDER BY u.created_at DESC
+    LIMIT 10
+  `).all() as any[];
+
+  // 8. Daily Challenges metrics
+  const totalChallengesRow = db.prepare('SELECT COUNT(*) as count FROM daily_challenges').get() as any;
+  const totalChallengeVotesRow = db.prepare('SELECT COUNT(*) as count FROM daily_challenge_votes').get() as any;
+
   return {
     totalUsers,
     totalTests,
@@ -760,7 +990,28 @@ export function getAdminOverviewData() {
     averageMatch,
     riasecCounts,
     registrationsByDay,
-    careerFrequency
+    careerFrequency,
+    ageStats: {
+      averageAge,
+      minAge: minAge <= 90 ? minAge : 16,
+      maxAge: maxAge > 0 ? maxAge : 22,
+      usersByAgeRange,
+      allAgesList
+    },
+    recentUsers: recentUsers.map(r => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      age: r.age || 17,
+      city: r.city || 'No especificada',
+      educationLevel: r.education_level || 'Bachillerato',
+      createdAt: r.created_at,
+      testsCount: Number(r.tests_count) || 0
+    })),
+    dailyChallengesOverview: {
+      totalChallenges: totalChallengesRow?.count || 0,
+      totalVotes: totalChallengeVotesRow?.count || 0
+    }
   };
 }
 
@@ -775,6 +1026,7 @@ export function getAdminUsersList(search?: string, ageRange?: string, educationL
       u.email, 
       u.name, 
       u.role, 
+      u.status,
       u.age, 
       u.education_level, 
       u.city, 
@@ -822,6 +1074,7 @@ export function getAdminUsersList(search?: string, ageRange?: string, educationL
       email: r.email,
       name: r.name,
       role: isEmailAdmin(r.email) ? 'admin' : (r.role || 'user'),
+      status: r.status || 'active',
       age: r.age,
       educationLevel: r.education_level || 'Bachillerato',
       city: r.city || 'No especificada',
@@ -961,4 +1214,374 @@ export function getAdminAuditLogs(limit: number = 30) {
   const db = getDb();
   return db.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?').all(limit) as any[];
 }
+
+// =========================================================================
+// PREGUNTA O DINÁMICA DEL DÍA (DAILY CHALLENGES)
+// =========================================================================
+
+/**
+ * Get active daily challenge with live stats and user's choice (if answered)
+ */
+export function getActiveDailyChallenge(userId?: string) {
+  const db = getDb();
+  const challenge = db.prepare('SELECT * FROM daily_challenges WHERE active = 1 ORDER BY updated_at DESC LIMIT 1').get() as any;
+  if (!challenge) return null;
+
+  let options: string[] = [];
+  try {
+    options = JSON.parse(challenge.options);
+  } catch (_) {
+    options = [];
+  }
+
+  // Get vote counts per option
+  const voteRows = db.prepare(`
+    SELECT selected_option_index, COUNT(*) as count
+    FROM daily_challenge_votes
+    WHERE challenge_id = ?
+    GROUP BY selected_option_index
+  `).all(challenge.id) as any[];
+
+  const votesPerOption: Record<number, number> = {};
+  let totalVotes = 0;
+  for (const r of voteRows) {
+    const idx = Number(r.selected_option_index);
+    const count = Number(r.count);
+    votesPerOption[idx] = count;
+    totalVotes += count;
+  }
+
+  const stats = options.map((opt, idx) => {
+    const votes = votesPerOption[idx] || 0;
+    const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+    return {
+      option: opt,
+      votes,
+      percentage
+    };
+  });
+
+  let userVote: number | null = null;
+  if (userId) {
+    const userVoteRow = db.prepare('SELECT selected_option_index FROM daily_challenge_votes WHERE challenge_id = ? AND user_id = ?').get(challenge.id, userId) as any;
+    if (userVoteRow) {
+      userVote = Number(userVoteRow.selected_option_index);
+    }
+  }
+
+  return {
+    id: challenge.id,
+    question: challenge.question,
+    options,
+    active: challenge.active === 1,
+    createdBy: challenge.created_by,
+    createdAt: challenge.created_at,
+    updatedAt: challenge.updated_at,
+    totalVotes,
+    stats,
+    userVote
+  };
+}
+
+/**
+ * Record a vote for the daily challenge
+ */
+export function voteDailyChallenge(challengeId: string, userId: string, userEmail: string | undefined, optionIndex: number) {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const voteId = crypto.randomUUID();
+
+  db.prepare(`
+    INSERT INTO daily_challenge_votes (id, challenge_id, user_id, user_email, selected_option_index, voted_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(challenge_id, user_id) DO UPDATE SET selected_option_index = excluded.selected_option_index, voted_at = excluded.voted_at
+  `).run(voteId, challengeId, userId, userEmail || 'estudiante@vocaccion.edu', optionIndex, now);
+
+  return getActiveDailyChallenge(userId);
+}
+
+/**
+ * List all daily challenges for Admin
+ */
+export function getAllDailyChallenges() {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM daily_challenges ORDER BY created_at DESC').all() as any[];
+
+  return rows.map(r => {
+    let options: string[] = [];
+    try { options = JSON.parse(r.options); } catch (_) {}
+
+    const voteRows = db.prepare(`
+      SELECT selected_option_index, COUNT(*) as count
+      FROM daily_challenge_votes
+      WHERE challenge_id = ?
+      GROUP BY selected_option_index
+    `).all(r.id) as any[];
+
+    const votesPerOption: Record<number, number> = {};
+    let totalVotes = 0;
+    for (const vr of voteRows) {
+      const idx = Number(vr.selected_option_index);
+      const count = Number(vr.count);
+      votesPerOption[idx] = count;
+      totalVotes += count;
+    }
+
+    const stats = options.map((opt, idx) => {
+      const votes = votesPerOption[idx] || 0;
+      const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+      return { option: opt, votes, percentage };
+    });
+
+    return {
+      id: r.id,
+      question: r.question,
+      options,
+      active: r.active === 1,
+      createdBy: r.created_by,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      totalVotes,
+      stats
+    };
+  });
+}
+
+/**
+ * Create a new daily challenge
+ */
+export function createDailyChallenge(question: string, options: string[], active: boolean = true, createdBy: string = 'admin') {
+  const db = getDb();
+  const id = 'challenge-' + crypto.randomUUID().substring(0, 8);
+  const now = new Date().toISOString();
+
+  if (active) {
+    db.prepare('UPDATE daily_challenges SET active = 0').run();
+  }
+
+  db.prepare(`
+    INSERT INTO daily_challenges (id, question, options, active, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, question.trim(), JSON.stringify(options), active ? 1 : 0, createdBy, now, now);
+
+  return getActiveDailyChallenge();
+}
+
+/**
+ * Update a daily challenge
+ */
+export function updateDailyChallenge(id: string, question: string, options: string[], active?: boolean) {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  if (active) {
+    db.prepare('UPDATE daily_challenges SET active = 0 WHERE id != ?').run(id);
+  }
+
+  const activeVal = active !== undefined ? (active ? 1 : 0) : undefined;
+  if (activeVal !== undefined) {
+    db.prepare(`
+      UPDATE daily_challenges
+      SET question = ?, options = ?, active = ?, updated_at = ?
+      WHERE id = ?
+    `).run(question.trim(), JSON.stringify(options), activeVal, now, id);
+  } else {
+    db.prepare(`
+      UPDATE daily_challenges
+      SET question = ?, options = ?, updated_at = ?
+      WHERE id = ?
+    `).run(question.trim(), JSON.stringify(options), now, id);
+  }
+
+  return true;
+}
+
+/**
+ * Toggle active state of a daily challenge
+ */
+export function toggleDailyChallengeActive(id: string, active: boolean) {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  if (active) {
+    db.prepare('UPDATE daily_challenges SET active = 0 WHERE id != ?').run(id);
+  }
+
+  db.prepare('UPDATE daily_challenges SET active = ?, updated_at = ? WHERE id = ?')
+    .run(active ? 1 : 0, now, id);
+
+  return true;
+}
+
+/**
+ * Delete a daily challenge and its votes
+ */
+export function deleteDailyChallenge(id: string) {
+  const db = getDb();
+  db.prepare('DELETE FROM daily_challenge_votes WHERE challenge_id = ?').run(id);
+  db.prepare('DELETE FROM daily_challenges WHERE id = ?').run(id);
+  return true;
+}
+
+/**
+ * Get detailed stats and responses for a daily challenge
+ */
+export function getDailyChallengeStats(id: string) {
+  const db = getDb();
+  const challenge = db.prepare('SELECT * FROM daily_challenges WHERE id = ?').get(id) as any;
+  if (!challenge) return null;
+
+  let options: string[] = [];
+  try { options = JSON.parse(challenge.options); } catch (_) {}
+
+  const votesList = db.prepare(`
+    SELECT v.id, v.user_id, v.user_email, v.selected_option_index, v.voted_at, u.name as user_name
+    FROM daily_challenge_votes v
+    LEFT JOIN users u ON u.id = v.user_id
+    WHERE v.challenge_id = ?
+    ORDER BY v.voted_at DESC
+  `).all(id) as any[];
+
+  const votesPerOption: Record<number, number> = {};
+  for (const v of votesList) {
+    const idx = Number(v.selected_option_index);
+    votesPerOption[idx] = (votesPerOption[idx] || 0) + 1;
+  }
+
+  const stats = options.map((opt, idx) => {
+    const votes = votesPerOption[idx] || 0;
+    const percentage = votesList.length > 0 ? Math.round((votes / votesList.length) * 100) : 0;
+    return { option: opt, votes, percentage };
+  });
+
+  return {
+    challenge: {
+      id: challenge.id,
+      question: challenge.question,
+      options,
+      active: challenge.active === 1,
+      createdAt: challenge.created_at
+    },
+    totalVotes: votesList.length,
+    stats,
+    votes: votesList.map(v => ({
+      id: v.id,
+      userId: v.user_id,
+      userName: v.user_name || 'Estudiante',
+      userEmail: v.user_email,
+      optionIndex: Number(v.selected_option_index),
+      optionText: options[Number(v.selected_option_index)] || '',
+      votedAt: v.voted_at
+    }))
+  };
+}
+
+/**
+ * Update user role (e.g. 'admin' or 'user')
+ */
+export function updateUserRole(userId: string, newRole: 'admin' | 'user') {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').run(newRole, now, userId);
+  return buildUserResponse(userId);
+}
+
+/**
+ * Toggle user active/suspended status
+ */
+export function toggleUserStatus(userId: string, status: 'active' | 'suspended') {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare('UPDATE users SET status = ?, updated_at = ? WHERE id = ?').run(status, now, userId);
+  return buildUserResponse(userId);
+}
+
+/**
+ * Delete a user and cascade associated records
+ */
+export function deleteUser(userId: string) {
+  const db = getDb();
+  const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as any;
+  if (user && isEmailAdmin(user.email)) {
+    throw new Error('No es posible eliminar una cuenta administrativa maestra del sistema.');
+  }
+
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM user_favorites WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM user_tests WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM daily_challenge_votes WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+  return { success: true };
+}
+
+/**
+ * System Constants functions
+ */
+export function getAllSystemConstants() {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM system_constants ORDER BY category ASC, key ASC').all() as any[];
+  return rows.map(r => ({
+    key: r.key,
+    value: r.value,
+    category: r.category,
+    description: r.description,
+    dataType: r.data_type,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by
+  }));
+}
+
+export function getSystemConstant(key: string) {
+  const db = getDb();
+  const r = db.prepare('SELECT * FROM system_constants WHERE key = ?').get(key) as any;
+  if (!r) return null;
+  return {
+    key: r.key,
+    value: r.value,
+    category: r.category,
+    description: r.description,
+    dataType: r.data_type,
+    updatedAt: r.updated_at,
+    updatedBy: r.updated_by
+  };
+}
+
+export function setSystemConstant(data: {
+  key: string;
+  value: string;
+  category?: string;
+  description?: string;
+  dataType?: string;
+  updatedBy?: string;
+}) {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const key = data.key.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+  const category = data.category || 'platform';
+  const description = data.description || '';
+  const dataType = data.dataType || 'string';
+  const updatedBy = data.updatedBy || 'admin';
+
+  db.prepare(`
+    INSERT INTO system_constants (key, value, category, description, data_type, updated_at, updated_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET 
+      value = excluded.value, 
+      category = excluded.category,
+      description = excluded.description,
+      data_type = excluded.data_type,
+      updated_at = excluded.updated_at,
+      updated_by = excluded.updated_by
+  `).run(key, String(data.value), category, description, dataType, now, updatedBy);
+
+  return getSystemConstant(key);
+}
+
+export function deleteSystemConstant(key: string) {
+  const db = getDb();
+  db.prepare('DELETE FROM system_constants WHERE key = ?').run(key);
+  return { success: true };
+}
+
 

@@ -1,15 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { getDailyAdvice } from '../models/adviceData';
-import { Quote, Sparkles, Calendar, HeartHandshake, ChevronRight } from 'lucide-react';
+import { Quote, Sparkles, Calendar, HeartHandshake, ChevronRight, Volume2, VolumeX } from 'lucide-react';
+import { speechService } from '../utils/speechService';
 
 interface DailyTipCardProps {
   onNavigateTest?: () => void;
 }
 
 export const DailyTipCard: React.FC<DailyTipCardProps> = ({ onNavigateTest }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
   // Obtiene determinísticamente la única frase del día basada en el calendario actual
   // Permanece idéntica durante todo el día y cambia automáticamente a medianoche
   const dailyQuote = getDailyAdvice();
+
+  useEffect(() => {
+    return () => {
+      speechService.stop();
+    };
+  }, []);
+
+  const handleToggleSpeak = () => {
+    if (isSpeaking) {
+      speechService.stop();
+      setIsSpeaking(false);
+      return;
+    }
+
+    const textToSpeak = `Frase del día: "${dailyQuote.quote}". Por ${dailyQuote.author}. Consejo para tu futuro y estudios: ${dailyQuote.practicalTip}`;
+    const started = speechService.speak(textToSpeak, {
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false)
+    });
+
+    if (!started) {
+      setIsSpeaking(false);
+    }
+  };
 
   // Fecha actual formateada en español (ej. "domingo, 13 de septiembre de 2026")
   const todayFormatted = new Intl.DateTimeFormat('es-CO', {
@@ -50,9 +77,31 @@ export const DailyTipCard: React.FC<DailyTipCardProps> = ({ onNavigateTest }) =>
           </div>
         </div>
 
-        <span className="text-[11px] text-purple-300/80 bg-white/5 border border-white/10 px-3 py-1 rounded-full font-medium">
-          Se renueva automáticamente a medianoche
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            id="daily-quote-listen-btn"
+            type="button"
+            onClick={handleToggleSpeak}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold text-purple-200 transition-colors border border-white/15"
+            title={isSpeaking ? 'Detener lectura en voz alta' : 'Escuchar frase del día'}
+          >
+            {isSpeaking ? (
+              <>
+                <VolumeX className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+                <span className="text-pink-300 font-bold">Detener</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-pink-300" />
+                <span>Escuchar</span>
+              </>
+            )}
+          </button>
+
+          <span className="text-[11px] text-purple-300/80 bg-white/5 border border-white/10 px-3 py-1 rounded-full font-medium hidden sm:inline-block">
+            Se renueva automáticamente a medianoche
+          </span>
+        </div>
       </div>
 
       {/* Main Quote Display: Una sola frase motivadora para hoy */}

@@ -16,6 +16,13 @@ import {
   getAdminOverviewData,
   getAdminUsersList,
   getAdminUserDetail,
+  updateUserRole,
+  toggleUserStatus,
+  deleteUser,
+  getAllSystemConstants,
+  getSystemConstant,
+  setSystemConstant,
+  deleteSystemConstant,
   getAdminTestsStats,
   getAdminQuestions,
   addAdminQuestion,
@@ -24,7 +31,16 @@ import {
   getAdminPlatformSettings,
   updateAdminPlatformSettings,
   getAdminAuditLogs,
-  addAuditLog
+  addAuditLog,
+  isEmailAdmin,
+  getActiveDailyChallenge,
+  voteDailyChallenge,
+  getAllDailyChallenges,
+  createDailyChallenge,
+  updateDailyChallenge,
+  toggleDailyChallengeActive,
+  deleteDailyChallenge,
+  getDailyChallengeStats
 } from './server/db';
 import {
   validateEmail,
@@ -309,7 +325,7 @@ function requireAdmin(req: Request, res: Response, next: () => void) {
     });
   }
 
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' || !isEmailAdmin(user.email)) {
     return res.status(403).json({
       error: 'Acceso denegado: Tu cuenta no posee permisos de administrador para este recurso.'
     });
@@ -365,6 +381,71 @@ app.get('/api/admin/users/:userId', requireAdmin, (req: Request, res: Response) 
   } catch (err: any) {
     console.error('Admin user detail error:', err);
     return res.status(500).json({ error: 'Error al consultar detalle del usuario.' });
+  }
+});
+
+// D1. Cambiar Rol de Usuario (Estudiante <-> Administrador)
+app.patch('/api/admin/users/:userId/role', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { role } = req.body;
+    const { userId } = req.params;
+
+    if (!role || (role !== 'admin' && role !== 'user')) {
+      return res.status(400).json({ error: 'Rol inválido. Debe ser "admin" o "user".' });
+    }
+
+    const updated = updateUserRole(userId, role);
+    if (!updated) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    addAuditLog('CHANGE_ROLE', adminUser.email, adminUser.id, `Cambio de rol para usuario ${updated.email}: nuevo rol ${role}`);
+    return res.json({ success: true, user: updated });
+  } catch (err: any) {
+    console.error('Admin change role error:', err);
+    return res.status(500).json({ error: 'Error al actualizar rol del usuario.' });
+  }
+});
+
+// D2. Activar / Desactivar cuenta de usuario
+app.patch('/api/admin/users/:userId/status', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { status } = req.body;
+    const { userId } = req.params;
+
+    if (!status || (status !== 'active' && status !== 'suspended')) {
+      return res.status(400).json({ error: 'Estado inválido. Debe ser "active" o "suspended".' });
+    }
+
+    const updated = toggleUserStatus(userId, status);
+    if (!updated) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    addAuditLog('CHANGE_STATUS', adminUser.email, adminUser.id, `Estado de cuenta modificado para ${updated.email}: ${status}`);
+    return res.json({ success: true, user: updated });
+  } catch (err: any) {
+    console.error('Admin change status error:', err);
+    return res.status(500).json({ error: 'Error al actualizar estado del usuario.' });
+  }
+});
+
+// D3. Eliminar usuario registrado
+app.delete('/api/admin/users/:userId', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { userId } = req.params;
+
+    deleteUser(userId);
+    addAuditLog('DELETE_USER', adminUser.email, adminUser.id, `Usuario eliminado (ID: ${userId})`);
+    return res.json({ success: true, message: 'Usuario eliminado exitosamente de la base de datos.' });
+  } catch (err: any) {
+    console.error('Admin delete user error:', err);
+    return res.status(err.message?.includes('maestra') ? 400 : 500).json({ 
+      error: err.message || 'Error al eliminar usuario.' 
+    });
   }
 });
 
@@ -456,6 +537,87 @@ app.post('/api/admin/config', requireAdmin, (req: Request, res: Response) => {
   }
 });
 
+// J1. Listar todas las Constantes y Parámetros Globales del Sistema
+app.get('/api/admin/constants', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const constants = getAllSystemConstants();
+    return res.json({ constants });
+  } catch (err: any) {
+    console.error('Admin get constants error:', err);
+    return res.status(500).json({ error: 'Error al obtener constantes del sistema.' });
+  }
+});
+
+// J2. Crear o sobrescribir una constante del sistema
+app.post('/api/admin/constants', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { key, value, category, description, dataType } = req.body;
+
+    if (!key || value === undefined) {
+      return res.status(400).json({ error: 'La clave (key) y el valor son obligatorios.' });
+    }
+
+    const constant = setSystemConstant({
+      key,
+      value: String(value),
+      category,
+      description,
+      dataType,
+      updatedBy: adminUser.email
+    });
+
+    addAuditLog('SET_CONSTANT', adminUser.email, adminUser.id, `Constante guardada: ${constant?.key} = "${value}"`);
+    return res.status(201).json({ constant });
+  } catch (err: any) {
+    console.error('Admin set constant error:', err);
+    return res.status(500).json({ error: 'Error al guardar la constante.' });
+  }
+});
+
+// J3. Modificar una constante existente por clave
+app.put('/api/admin/constants/:key', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { key } = req.params;
+    const { value, category, description, dataType } = req.body;
+
+    if (value === undefined) {
+      return res.status(400).json({ error: 'El valor de la constante es obligatorio.' });
+    }
+
+    const constant = setSystemConstant({
+      key,
+      value: String(value),
+      category,
+      description,
+      dataType,
+      updatedBy: adminUser.email
+    });
+
+    addAuditLog('UPDATE_CONSTANT', adminUser.email, adminUser.id, `Constante actualizada: ${key} = "${value}"`);
+    return res.json({ constant });
+  } catch (err: any) {
+    console.error('Admin update constant error:', err);
+    return res.status(500).json({ error: 'Error al actualizar la constante.' });
+  }
+});
+
+// J4. Eliminar una constante del sistema
+app.delete('/api/admin/constants/:key', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { key } = req.params;
+
+    deleteSystemConstant(key);
+    addAuditLog('DELETE_CONSTANT', adminUser.email, adminUser.id, `Constante eliminada: ${key}`);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error('Admin delete constant error:', err);
+    return res.status(500).json({ error: 'Error al eliminar la constante.' });
+  }
+});
+
 // K. Exportación de reporte resumido
 app.get('/api/admin/export', requireAdmin, (req: Request, res: Response) => {
   try {
@@ -488,6 +650,168 @@ app.get('/api/admin/export', requireAdmin, (req: Request, res: Response) => {
     return res.json(report);
   } catch (err: any) {
     return res.status(500).json({ error: 'Error al generar reporte descargable.' });
+  }
+});
+
+// ----------------------------------------------------
+// PREGUNTA O DINÁMICA DEL DÍA - PUBLIC & USER ROUTES
+// ----------------------------------------------------
+
+// Obtener la pregunta del día activa con sus opciones y estadísticas
+app.get('/api/daily-challenge/active', (req: Request, res: Response) => {
+  try {
+    const token = getAuthToken(req);
+    let userId: string | undefined = undefined;
+    if (token) {
+      const user = getUserByToken(token);
+      if (user) userId = user.id;
+    }
+    const challenge = getActiveDailyChallenge(userId);
+    return res.json({ challenge });
+  } catch (err: any) {
+    console.error('Error fetching active daily challenge:', err);
+    return res.status(500).json({ error: 'Error al consultar pregunta del día.' });
+  }
+});
+
+// Votar o responder a la pregunta del día
+app.post('/api/daily-challenge/:id/vote', (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { optionIndex, guestId } = req.body;
+
+    if (optionIndex === undefined || typeof optionIndex !== 'number' || optionIndex < 0) {
+      return res.status(400).json({ error: 'Debes seleccionar una opción válida.' });
+    }
+
+    const token = getAuthToken(req);
+    let userId: string = guestId || 'guest-' + (req.ip || 'anon');
+    let userEmail: string | undefined = undefined;
+
+    if (token) {
+      const user = getUserByToken(token);
+      if (user) {
+        userId = user.id;
+        userEmail = user.email;
+      }
+    }
+
+    const updatedChallenge = voteDailyChallenge(id, userId, userEmail, optionIndex);
+    return res.json({
+      success: true,
+      challenge: updatedChallenge,
+      userVote: optionIndex
+    });
+  } catch (err: any) {
+    console.error('Error voting on daily challenge:', err);
+    return res.status(500).json({ error: 'Error al registrar tu respuesta.' });
+  }
+});
+
+// ----------------------------------------------------
+// PREGUNTA O DINÁMICA DEL DÍA - ADMIN MANAGEMENT ROUTES
+// ----------------------------------------------------
+
+// L. Listar todas las preguntas del día creadas
+app.get('/api/admin/daily-challenges', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const challenges = getAllDailyChallenges();
+    return res.json({ challenges });
+  } catch (err: any) {
+    console.error('Admin list challenges error:', err);
+    return res.status(500).json({ error: 'Error al consultar dinámicas del día.' });
+  }
+});
+
+// M. Crear nueva pregunta del día
+app.post('/api/admin/daily-challenges', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { question, options, active } = req.body;
+
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      return res.status(400).json({ error: 'El texto de la pregunta es obligatorio.' });
+    }
+    if (!Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({ error: 'Debes ingresar al menos 2 opciones de respuesta.' });
+    }
+
+    const cleanOptions = options.map((o: any) => String(o).trim()).filter(Boolean);
+    if (cleanOptions.length < 2) {
+      return res.status(400).json({ error: 'Opciones de respuesta inválidas.' });
+    }
+
+    const newChallenge = createDailyChallenge(question.trim(), cleanOptions, active !== false, adminUser.name || adminUser.email);
+    addAuditLog('CREATE_DAILY_CHALLENGE', adminUser.email, adminUser.id, `Nueva dinámica: "${question.substring(0, 40)}..."`);
+
+    return res.status(201).json({ challenge: newChallenge });
+  } catch (err: any) {
+    console.error('Admin create challenge error:', err);
+    return res.status(500).json({ error: 'Error al crear la pregunta del día.' });
+  }
+});
+
+// N. Modificar pregunta del día existente
+app.put('/api/admin/daily-challenges/:id', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { id } = req.params;
+    const { question, options, active } = req.body;
+
+    if (!question || !Array.isArray(options) || options.length < 2) {
+      return res.status(400).json({ error: 'Pregunta y al menos 2 opciones son obligatorias.' });
+    }
+
+    const cleanOptions = options.map((o: any) => String(o).trim()).filter(Boolean);
+    updateDailyChallenge(id, question.trim(), cleanOptions, active);
+    addAuditLog('UPDATE_DAILY_CHALLENGE', adminUser.email, adminUser.id, `Modificada dinámica #${id}`);
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Error al actualizar dinámica.' });
+  }
+});
+
+// O. Alternar estado activo / inactivo de pregunta del día
+app.patch('/api/admin/daily-challenges/:id/toggle', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { id } = req.params;
+    const { active } = req.body;
+
+    toggleDailyChallengeActive(id, !!active);
+    addAuditLog('TOGGLE_DAILY_CHALLENGE', adminUser.email, adminUser.id, `Dinámica #${id} estado: ${active ? 'activa' : 'inactiva'}`);
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Error al cambiar estado de la dinámica.' });
+  }
+});
+
+// P. Eliminar pregunta del día
+app.delete('/api/admin/daily-challenges/:id', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const adminUser = (req as any).adminUser;
+    const { id } = req.params;
+
+    deleteDailyChallenge(id);
+    addAuditLog('DELETE_DAILY_CHALLENGE', adminUser.email, adminUser.id, `Dinámica #${id} eliminada`);
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Error al eliminar dinámica.' });
+  }
+});
+
+// Q. Consultar respuestas y estadísticas detalladas de una pregunta del día
+app.get('/api/admin/daily-challenges/:id/stats', requireAdmin, (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const stats = getDailyChallengeStats(id);
+    if (!stats) return res.status(404).json({ error: 'Dinámica no encontrada.' });
+    return res.json(stats);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Error al consultar respuestas de la dinámica.' });
   }
 });
 
