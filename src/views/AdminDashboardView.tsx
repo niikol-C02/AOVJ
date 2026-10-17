@@ -86,15 +86,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     totalUsers: 0,
     totalTests: 0,
     activeUsers: 0,
-    averageMatch: 88,
+    averageMatch: 0,
     riasecCounts: { R: 0, I: 0, A: 0, S: 0, E: 0, C: 0 },
     registrationsByDay: {},
     careerFrequency: {},
     ageStats: {
-      averageAge: 17.2,
-      minAge: 14,
-      maxAge: 24,
-      usersByAgeRange: { '12-15': 2, '16-17': 5, '18-20': 4, '21-24': 1, '25+': 0 },
+      averageAge: 0,
+      minAge: 0,
+      maxAge: 0,
+      usersByAgeRange: { '12-15': 0, '16-17': 0, '18-20': 0, '21-24': 0, '25+': 0 },
       allAgesList: []
     },
     recentUsers: []
@@ -141,8 +141,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     customQuestions: any[];
   }>({
     totalCompleted: 0,
-    averageTimeMinutes: 8.5,
-    completionRatePercent: 94.2,
+    averageTimeMinutes: 0,
+    completionRatePercent: 0,
     customQuestions: []
   });
 
@@ -963,11 +963,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <div>
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Afinidad Promedio</p>
                 <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1 font-['Outfit',sans-serif]">
-                  {overviewData.averageMatch}%
+                  {overviewData.totalTests > 0 && overviewData.averageMatch > 0 ? `${overviewData.averageMatch}%` : 'Sin tests'}
                 </h3>
                 <p className="text-[11px] text-amber-600 font-semibold mt-1 flex items-center gap-1">
                   <Award className="w-3 h-3" />
-                  <span>Ponderación vocacional</span>
+                  <span>{overviewData.totalTests > 0 ? 'Ponderación vocacional real' : 'Pendiente de tests completados'}</span>
                 </p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
@@ -1070,7 +1070,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
                 <div className="px-3 py-1.5 rounded-2xl bg-purple-100 text-purple-900 font-bold text-xs flex items-center gap-1 border border-purple-200">
                   <span>Promedio:</span>
-                  <span className="font-mono text-sm">{overviewData.ageStats?.averageAge || 17} años</span>
+                  <span className="font-mono text-sm">
+                    {overviewData.ageStats?.averageAge && overviewData.ageStats.averageAge > 0 
+                      ? `${overviewData.ageStats.averageAge} años` 
+                      : 'Sin datos'}
+                  </span>
                 </div>
               </div>
 
@@ -1109,7 +1113,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <div className="p-3 rounded-2xl bg-purple-50/50 border border-purple-100 flex items-center justify-between text-xs text-slate-600">
                 <span>Rango detectado:</span>
                 <span className="font-bold text-purple-900">
-                  Desde los {overviewData.ageStats?.minAge || 14} hasta los {overviewData.ageStats?.maxAge || 24} años
+                  {overviewData.ageStats?.minAge && overviewData.ageStats.maxAge
+                    ? `Desde los ${overviewData.ageStats.minAge} hasta los ${overviewData.ageStats.maxAge} años`
+                    : 'Sin edades suficientes'}
                 </span>
               </div>
             </div>
@@ -1484,9 +1490,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="font-bold text-sm text-slate-800">Historial de Evaluaciones</h4>
+                  <h4 className="font-bold text-sm text-slate-800">Historial de Evaluaciones RIASEC</h4>
                   {selectedUserDetail.testHistory?.length === 0 ? (
-                    <p className="text-xs text-slate-400">Este estudiante aún no ha completado el test vocacional.</p>
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs text-slate-500">
+                      Este estudiante aún no ha completado el test vocacional en la plataforma.
+                    </div>
                   ) : (
                     selectedUserDetail.testHistory?.map((t: any, i: number) => (
                       <div key={i} className="p-4 rounded-2xl bg-purple-50/60 border border-purple-100 space-y-2 text-xs">
@@ -1496,14 +1504,51 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                         </div>
                         <p className="text-slate-600">{t.profileDescription}</p>
                         <div className="flex flex-wrap gap-1.5 pt-1">
-                          {t.recommendedCareers?.slice(0, 4).map((rc: any, idx: number) => (
-                            <span key={idx} className="px-2 py-0.5 rounded-md bg-white border border-purple-200 text-purple-800 font-medium text-[10px]">
-                              {rc.careerId} ({rc.matchPercentage}%)
-                            </span>
-                          ))}
+                          {t.recommendedCareers?.slice(0, 4).map((rc: any, idx: number) => {
+                            const careerObj = COMPREHENSIVE_CAREERS_DATA.find(c => c.id === rc.careerId);
+                            return (
+                              <span key={idx} className="px-2.5 py-1 rounded-lg bg-white border border-purple-200 text-purple-900 font-semibold text-[11px] shadow-2xs">
+                                {careerObj?.name || rc.careerId} ({rc.matchPercentage}%)
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     ))
+                  )}
+                </div>
+
+                {/* Carreras de Interés / Seleccionadas por el Estudiante */}
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-sm text-slate-800">Carreras Seleccionadas y Guardadas</h4>
+                    <span className="text-xs font-semibold text-pink-600">
+                      {selectedUserDetail.savedCareers?.length || 0} de interés
+                    </span>
+                  </div>
+
+                  {!selectedUserDetail.savedCareers || selectedUserDetail.savedCareers.length === 0 ? (
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs text-slate-500">
+                      El estudiante no ha guardado carreras profesionales en su lista de favoritos todavía.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedUserDetail.savedCareers.map((cid: string) => {
+                        const careerObj = COMPREHENSIVE_CAREERS_DATA.find(c => c.id === cid);
+                        return (
+                          <div
+                            key={cid}
+                            className="p-3 rounded-2xl bg-pink-50/50 border border-pink-100 flex items-center gap-2.5 text-xs text-slate-800"
+                          >
+                            <span className="text-base">🎓</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold truncate text-pink-950">{careerObj?.name || cid}</p>
+                              <p className="text-[10px] text-slate-500 capitalize">{careerObj?.area || 'Carrera Profesional'}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 

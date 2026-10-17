@@ -40,8 +40,12 @@ import {
   updateDailyChallenge,
   toggleDailyChallengeActive,
   deleteDailyChallenge,
-  getDailyChallengeStats
+  getDailyChallengeStats,
+  createPasswordResetToken,
+  verifyPasswordResetToken,
+  resetPasswordWithToken
 } from './server/db';
+import { sendPasswordResetEmailService } from './server/mailer';
 import {
   validateEmail,
   isPasswordValid,
@@ -198,21 +202,90 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
   }
 });
 
-// 6. Forgot Password
-app.post('/api/auth/forgot-password', (req: Request, res: Response) => {
+// 6. Forgot Password (Request recovery link & email)
+app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Ingresa un correo electrónico.' });
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Por favor ingresa un correo electrónico.' });
     }
-    // Return friendly instructions
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.isValid) {
+      return res.status(400).json({ error: emailCheck.error });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const tokenResult = createPasswordResetToken(cleanEmail);
+
+    let mailResult = { sent: false, configured: false, resetUrl: '' };
+
+    const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+
+    if (tokenResult.token && tokenResult.user) {
+      mailResult = await sendPasswordResetEmailService({
+        toEmail: cleanEmail,
+        userName: tokenResult.user.name || 'Estudiante VocAcción',
+        resetToken: tokenResult.token,
+        baseUrl
+      });
+    }
+
+    // Por seguridad y privacidad: no revelar si el correo existe o no en la plataforma
     return res.json({
       success: true,
-      message: `Si la cuenta existe con el correo ${email}, hemos registrado tu solicitud de restablecimiento.`
+      message: 'Si el correo electrónico está registrado en VocAcción, recibirás un mensaje con un enlace seguro para restablecer tu contraseña. Revisa tu bandeja de entrada y carpeta de spam.',
+      mailConfigured: mailResult.configured,
+      mailSent: mailResult.sent,
+      // Solo en entorno de desarrollo / vista previa si no hay SMTP configurado, facilitamos el enlace para pruebas
+      previewResetUrl: !mailResult.configured && tokenResult.token ? mailResult.resetUrl : undefined
     });
   } catch (err: any) {
     console.error('API Forgot Password error:', err);
-    return res.status(500).json({ error: 'Error al procesar recuperación de contraseña.' });
+    return res.status(500).json({ error: 'Error interno al procesar la recuperación de contraseña.' });
+  }
+});
+
+// 6.1 Verify Password Reset Token
+app.get('/api/auth/verify-reset-token', (req: Request, res: Response) => {
+  try {
+    const token = req.query.token as string;
+    if (!token) {
+      return res.status(400).json({ valid: false, error: 'Token no especificado.' });
+    }
+
+    const result = verifyPasswordResetToken(token);
+    if (!result.valid) {
+      return res.status(400).json(result);
+    }
+
+    return res.json(result);
+  } catch (err: any) {
+    console.error('API Verify Reset Token error:', err);
+    return res.status(500).json({ valid: false, error: 'Error al verificar token de recuperación.' });
+  }
+});
+
+// 6.2 Reset Password With Token
+app.post('/api/auth/reset-password', (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token y nueva contraseña son obligatorios.' });
+    }
+
+    const result = resetPasswordWithToken(token, newPassword);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    return res.json({
+      success: true,
+      message: '¡Tu contraseña ha sido actualizada con éxito! Ahora puedes iniciar sesión con tu nueva contraseña.'
+    });
+  } catch (err: any) {
+    console.error('API Reset Password error:', err);
+    return res.status(500).json({ error: 'Error interno al actualizar la contraseña.' });
   }
 });
 

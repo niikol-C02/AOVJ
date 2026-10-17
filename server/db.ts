@@ -149,6 +149,16 @@ export function getDb(): DatabaseSync {
       updated_at TEXT NOT NULL,
       updated_by TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      token TEXT UNIQUE NOT NULL,
+      expires_at INTEGER NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Safe migration: Add role and status columns if DB existed prior to this update
@@ -963,7 +973,7 @@ export function getAdminOverviewData() {
     } catch (_) {}
   }
 
-  const averageMatch = matchCount > 0 ? Math.round(matchSum / matchCount) : 88;
+  const averageMatch = matchCount > 0 ? Math.round(matchSum / matchCount) : 0;
 
   // 5. Registrations by date (last 7 days)
   const registrationsByDay: Record<string, number> = {};
@@ -987,7 +997,7 @@ export function getAdminOverviewData() {
   };
   let sumAge = 0;
   let validAgeCount = 0;
-  let minAge = 99;
+  let minAge = 999;
   let maxAge = 0;
 
   for (const row of userAges) {
@@ -1007,7 +1017,9 @@ export function getAdminOverviewData() {
     }
   }
 
-  const averageAge = validAgeCount > 0 ? Math.round((sumAge / validAgeCount) * 10) / 10 : 17;
+  const averageAge = validAgeCount > 0 ? Math.round((sumAge / validAgeCount) * 10) / 10 : 0;
+  const computedMinAge = validAgeCount > 0 ? minAge : 0;
+  const computedMaxAge = validAgeCount > 0 ? maxAge : 0;
   const allAgesList = Object.entries(ageCounts)
     .map(([a, c]) => ({ age: Number(a), count: c }))
     .sort((a, b) => a.age - b.age);
@@ -1030,13 +1042,15 @@ export function getAdminOverviewData() {
     totalTests,
     activeUsers,
     averageMatch,
+    hasTestData: totalTests > 0,
     riasecCounts,
     registrationsByDay,
     careerFrequency,
     ageStats: {
       averageAge,
-      minAge: minAge <= 90 ? minAge : 16,
-      maxAge: maxAge > 0 ? maxAge : 22,
+      minAge: computedMinAge,
+      maxAge: computedMaxAge,
+      validAgeCount,
       usersByAgeRange,
       allAgesList
     },
@@ -1044,7 +1058,7 @@ export function getAdminOverviewData() {
       id: r.id,
       name: r.name,
       email: r.email,
-      age: r.age || 17,
+      age: r.age,
       city: r.city || 'No especificada',
       educationLevel: r.education_level || 'Bachillerato',
       createdAt: r.created_at,
@@ -1623,6 +1637,123 @@ export function setSystemConstant(data: {
 export function deleteSystemConstant(key: string) {
   const db = getDb();
   db.prepare('DELETE FROM system_constants WHERE key = ?').run(key);
+  return { success: true };
+}
+
+export function createPasswordResetToken(email: string): { success: boolean; token?: string; user?: any } {
+  const db = getDb();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const user = db.prepare('SELECT id, name, email FROM users WHERE email = ?').get(cleanEmail) as any;
+  if (!user) {
+    // Retornar éxito genérico para proteger la privacidad del usuario (no revelar si existe o no)
+    return { success: true };
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const id = crypto.randomUUID();
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hora de validez
+  const now = new Date().toISOString();
+
+  // Invalidate any previous unused tokens for this user
+  try {
+    db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE user_id = ? AND used = 0').run(user.id);
+  } catch (_) {}
+
+  db.prepare(`
+    INSERT INTO password_reset_tokens (id, user_id, token, expires_at, used, created_at)
+    VALUES (?, ?, ?, ?, 0, ?)
+  `).run(id, user.id, token, expiresAt, now);
+
+  return {
+    success: true,
+    token,
+    user
+  };
+}
+
+export function verifyPasswordResetToken(token: string): { valid: boolean; email?: string; error?: string } {
+  if (!token || typeof token !== 'string') {
+    return { valid: false, error: 'Token de recuperación no proporcionado o inválido.' };
+  }
+
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT prt.id, prt.user_id, prt.expires_at, prt.used, u.email
+    FROM password_reset_tokens prt
+    JOIN users u ON u.id = prt.user_id
+    WHERE prt.token = ?
+  `).get(token) as any;
+
+  if (!row) {
+    return { valid: false, error: 'El enlace de recuperación no es válido o ya no existe.' };
+  }
+
+  if (row.used === 1) {
+    return { valid: false, error: 'Este enlace de recuperación ya fue utilizado anteriormente.' };
+  }
+
+  if (Date.now() > row.expires_at) {
+    return { valid: false, error: 'El enlace de recuperación ha caducado (validez de 1 hora). Solicita uno nuevo.' };
+  }
+
+  return { valid: true, email: row.email };
+}
+
+export function resetPasswordWithToken(token: string, newPassword: string): { success: boolean; error?: string } {
+  if (!token || typeof token !== 'string') {
+    return { success: false, error: 'Token de recuperación requerido.' };
+  }
+
+  if (!isPasswordValid(newPassword)) {
+    const missing = getMissingPasswordRequirements(newPassword || '');
+    return {
+      success: false,
+      error: `La nueva contraseña no cumple los requisitos: ${missing.join(', ')}.`
+    };
+  }
+
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT prt.id, prt.user_id, prt.expires_at, prt.used, u.email
+    FROM password_reset_tokens prt
+    JOIN users u ON u.id = prt.user_id
+    WHERE prt.token = ?
+  `).get(token) as any;
+
+  if (!row) {
+    return { success: false, error: 'El enlace de recuperación no es válido.' };
+  }
+
+  if (row.used === 1) {
+    return { success: false, error: 'Este enlace de recuperación ya fue utilizado.' };
+  }
+
+  if (Date.now() > row.expires_at) {
+    return { success: false, error: 'El enlace de recuperación ha caducado. Por favor solicita uno nuevo.' };
+  }
+
+  const newHash = hashPassword(newPassword);
+  const now = new Date().toISOString();
+
+  // Actualizar contraseña del usuario
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(newHash, now, row.user_id);
+
+  // Marcar token como utilizado
+  db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(row.id);
+
+  // Cerrar sesiones activas previas por seguridad
+  try {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(row.user_id);
+  } catch (_) {}
+
+  // Registrar auditoría
+  try {
+    db.prepare(`
+      INSERT INTO audit_logs (id, user_id, user_email, action, details, timestamp)
+      VALUES (?, ?, ?, 'password_reset_success', 'Contraseña restablecida exitosamente vía token de recuperación', ?)
+    `).run(crypto.randomUUID(), row.user_id, row.email, now);
+  } catch (_) {}
+
   return { success: true };
 }
 

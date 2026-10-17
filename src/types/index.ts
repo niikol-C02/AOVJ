@@ -10,7 +10,7 @@ export type ViewType =
   | 'compare'
   | 'admin';
 
-export type AuthMode = 'login' | 'register' | 'forgot-password';
+export type AuthMode = 'login' | 'register' | 'forgot-password' | 'reset-password';
 
 export type AgeStage = '13-15' | '16-17' | '18-21' | '22+' | 'infancia' | 'adolescencia' | 'juventud' | 'adultez';
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StorageController } from '../controllers/StorageController';
 import { User, AuthMode } from '../types';
 import { PasswordRequirementsIndicator } from '../components/PasswordRequirementsIndicator';
@@ -18,7 +18,9 @@ import {
   GraduationCap, 
   MapPin, 
   ShieldCheck,
-  Award
+  Award,
+  KeyRound,
+  ExternalLink
 } from 'lucide-react';
 
 interface WelcomeAuthViewProps {
@@ -43,6 +45,16 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
   const [educationLevel, setEducationLevel] = useState('Último año de Bachillerato / Secundaria');
   const [city, setCity] = useState('');
 
+  // Password Recovery & Reset fields
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [isTokenChecking, setIsTokenChecking] = useState(false);
+  const [tokenEmail, setTokenEmail] = useState('');
+  const [previewResetUrl, setPreviewResetUrl] = useState('');
+
   // UI state
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -52,6 +64,37 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
     setErrorMsg('');
     setSuccessMsg('');
   };
+
+  // Detect recovery token in URL hash or query params
+  useEffect(() => {
+    const hash = window.location.hash;
+    const search = window.location.search;
+    let foundToken = '';
+
+    if (hash.includes('reset-token=')) {
+      const match = hash.match(/reset-token=([^&]+)/);
+      if (match && match[1]) foundToken = decodeURIComponent(match[1]);
+    } else if (search.includes('token=')) {
+      const params = new URLSearchParams(search);
+      foundToken = params.get('token') || '';
+    }
+
+    if (foundToken) {
+      setResetToken(foundToken);
+      setMode('reset-password');
+      setIsTokenChecking(true);
+      StorageController.verifyResetToken(foundToken)
+        .then(res => {
+          if (res.valid && res.email) {
+            setTokenEmail(res.email);
+            setEmail(res.email);
+          } else {
+            setErrorMsg(res.error || 'El enlace de recuperación es inválido o ha caducado.');
+          }
+        })
+        .finally(() => setIsTokenChecking(false));
+    }
+  }, []);
 
   // 1. Email & Password Login
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -145,31 +188,97 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
     }
   };
 
-  // 4. Password Recovery
+  // 4. Password Recovery Request
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     clearMessages();
+    setPreviewResetUrl('');
 
-    if (!email.trim()) {
-      setErrorMsg('Ingresa tu correo electrónico registrado.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setErrorMsg('Por favor ingresa tu correo electrónico registrado.');
+      return;
+    }
+
+    const emailCheck = validateEmail(cleanEmail);
+    if (!emailCheck.isValid) {
+      setErrorMsg(emailCheck.error || 'Por favor ingresa un formato de correo válido.');
       return;
     }
 
     setIsLoading(true);
     try {
-      const result = await StorageController.sendPasswordReset(email);
+      const result = await StorageController.sendPasswordReset(cleanEmail);
       if (result.success) {
-        setSuccessMsg(`Te hemos enviado un correo a ${email} con el enlace oficial para restablecer tu contraseña. Revisa tu bandeja de entrada.`);
+        setSuccessMsg(
+          result.message ||
+          'Si la cuenta existe, recibirás un mensaje con las instrucciones oficiales para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.'
+        );
+        if (result.previewResetUrl) {
+          setPreviewResetUrl(result.previewResetUrl);
+        }
         onShowToast(
-          'Correo de recuperación enviado',
-          `Revisa tu bandeja de entrada en ${email}.`,
-          'success'
+          'Solicitud de recuperación procesada',
+          'Revisa tu bandeja de entrada o tu carpeta de spam.',
+          'info'
         );
       } else {
-        setErrorMsg(result.error || 'No encontramos una cuenta con este correo.');
+        setErrorMsg(result.error || 'No se pudo procesar la solicitud.');
       }
     } catch (err: any) {
-      setErrorMsg(err?.message || 'No se pudo enviar el correo de recuperación.');
+      setErrorMsg(err?.message || 'Error de conexión al solicitar recuperación.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 5. Submit New Password Reset
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+
+    if (!newPassword) {
+      setErrorMsg('Por favor ingresa tu nueva contraseña.');
+      return;
+    }
+
+    if (!isPasswordValid(newPassword)) {
+      const missing = getMissingPasswordRequirements(newPassword);
+      setErrorMsg(`Requisitos faltantes en la contraseña: ${missing.join(', ')}.`);
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setErrorMsg('Las contraseñas no coinciden. Por favor confirma tu contraseña exactamente igual.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await StorageController.resetPassword(resetToken, newPassword);
+      if (result.success) {
+        setSuccessMsg(
+          result.message ||
+          '¡Contraseña actualizada exitosamente! Ya puedes iniciar sesión con tu nueva contraseña.'
+        );
+        onShowToast(
+          'Contraseña actualizada',
+          'Tu nueva clave está lista. Inicia sesión con tus nuevas credenciales.',
+          'success'
+        );
+        // Clear reset token from URL
+        if (window.location.hash.includes('reset-token=')) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setResetToken('');
+        setMode('login');
+      } else {
+        setErrorMsg(result.error || 'No se pudo actualizar la contraseña. El enlace puede haber expirado.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error de conexión al actualizar la contraseña.');
     } finally {
       setIsLoading(false);
     }
@@ -275,7 +384,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
             )}
 
             {/* Mode Selector Tabs */}
-            {mode !== 'forgot-password' && (
+            {mode !== 'forgot-password' && mode !== 'reset-password' && (
               <div className="flex rounded-2xl bg-slate-100 p-1 mb-5">
                 <button
                   type="button"
@@ -696,7 +805,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                     Recuperar tu Contraseña
                   </h3>
                   <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                    Escribe el correo electrónico asociado a tu cuenta de VocAcción. Te enviaremos un enlace seguro para restablecerla.
+                    Escribe el correo electrónico asociado a tu cuenta de VocAcción. Si existe en el sistema, enviaremos un enlace seguro con validez de 1 hora para restablecerla.
                   </p>
                 </div>
 
@@ -731,6 +840,148 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                   )}
                 </button>
 
+                {/* Vista previa de enlace en entorno de prueba si SMTP no está configurado */}
+                {previewResetUrl && (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-900 text-xs space-y-2 animate-in fade-in">
+                    <div className="flex items-center gap-2 font-bold text-amber-950">
+                      <KeyRound className="w-4 h-4 text-amber-600" />
+                      <span>Enlace de Recuperación Generado:</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                      El servidor ha generado un token seguro con validez de 1 hora. Puedes ingresar directamente haciendo clic aquí:
+                    </p>
+                    <a
+                      href={previewResetUrl}
+                      onClick={() => {
+                        window.location.hash = previewResetUrl.split('#')[1] || '';
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
+                    >
+                      <span>Abrir pantalla para cambiar contraseña</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+
+                <div className="pt-2 text-center text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearMessages();
+                      setPreviewResetUrl('');
+                      setMode('login');
+                    }}
+                    className="font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  >
+                    ← Volver a Iniciar Sesión
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* 5. MODE: RESET PASSWORD (NEW PASSWORD FORM) */}
+            {mode === 'reset-password' && (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-xs font-bold mb-2">
+                    <KeyRound className="w-3.5 h-3.5 text-purple-600" />
+                    <span>Restablecimiento Seguro de Contraseña</span>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 font-['Outfit',sans-serif]">
+                    Crea tu nueva contraseña
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                    Define una nueva clave segura para tu cuenta. Al guardarla, podrás iniciar sesión inmediatamente.
+                  </p>
+                  {tokenEmail && (
+                    <div className="mt-2 text-xs font-semibold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200/60 inline-block">
+                      Cuenta: <span className="text-purple-700">{tokenEmail}</span>
+                    </div>
+                  )}
+                </div>
+
+                {isTokenChecking ? (
+                  <div className="py-8 text-center text-slate-500 text-xs flex flex-col items-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-purple-600" />
+                    <span>Verificando validez del enlace...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-['Outfit',sans-serif]">
+                        Nueva Contraseña *
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          id="reset-new-password"
+                          type={showNewPassword ? 'text' : 'password'}
+                          required
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          placeholder="Mínimo 8 caracteres, mayúscula, número y símbolo"
+                          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 transition-all shadow-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                          tabIndex={-1}
+                        >
+                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 font-['Outfit',sans-serif]">
+                        Confirmar Nueva Contraseña *
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          id="reset-confirm-new-password"
+                          type={showConfirmNewPassword ? 'text' : 'password'}
+                          required
+                          value={confirmNewPassword}
+                          onChange={e => setConfirmNewPassword(e.target.value)}
+                          placeholder="Repite exactamente tu nueva contraseña"
+                          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white focus:bg-white text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500 transition-all shadow-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+                          tabIndex={-1}
+                        >
+                          {showConfirmNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Requisitos visuales en tiempo real */}
+                    {(newPassword.length > 0 || confirmNewPassword.length > 0) && (
+                      <PasswordRequirementsIndicator
+                        password={newPassword}
+                        confirmPassword={confirmNewPassword}
+                      />
+                    )}
+
+                    <button
+                      id="btn-submit-reset-password"
+                      type="submit"
+                      disabled={isLoading}
+                      className="w-full py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600 hover:from-pink-600 hover:via-purple-700 hover:to-indigo-700 text-white shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-70 font-['Outfit',sans-serif] tracking-wide"
+                    >
+                      {isLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <span>Guardar Nueva Contraseña</span>
+                      )}
+                    </button>
+                  </>
+                )}
+
                 <div className="pt-2 text-center text-xs">
                   <button
                     type="button"
@@ -740,7 +991,7 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
                     }}
                     className="font-bold text-slate-600 hover:text-slate-900 transition-colors"
                   >
-                    ← Volver a Iniciar Sesión
+                    ← Volver al Inicio de Sesión
                   </button>
                 </div>
               </form>

@@ -37,11 +37,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Recovery & error states
   const [errorMsg, setErrorMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [previewResetUrl, setPreviewResetUrl] = useState('');
 
   if (!isOpen) return null;
 
   const resetForm = () => {
     setErrorMsg('');
+    setPreviewResetUrl('');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -130,25 +132,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setPreviewResetUrl('');
 
-    if (!email.trim()) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
       setErrorMsg('Ingresa tu correo electrónico para enviar el enlace de recuperación.');
       return;
     }
 
+    const emailCheck = validateEmail(cleanEmail);
+    if (!emailCheck.isValid) {
+      setErrorMsg(emailCheck.error || 'Por favor ingresa un formato de correo válido.');
+      return;
+    }
+
     setIsLoading(true);
-    const result = await StorageController.sendPasswordReset(email);
+    const result = await StorageController.sendPasswordReset(cleanEmail);
     setIsLoading(false);
 
     if (result.success) {
+      if (result.previewResetUrl) {
+        setPreviewResetUrl(result.previewResetUrl);
+      }
       onShowToast(
-        'Correo de recuperación enviado',
-        `Revisa tu bandeja de entrada en ${email} para restablecer tu contraseña.`,
-        'success'
+        'Solicitud procesada',
+        result.message || 'Si la cuenta existe, recibirás las instrucciones oficiales en tu correo para restablecer tu contraseña.',
+        'info'
       );
-      setMode('login');
     } else {
-      setErrorMsg(result.error || 'No pudimos enviar el correo de recuperación.');
+      setErrorMsg(result.error || 'No pudimos procesar la solicitud de recuperación.');
     }
   };
 
@@ -597,6 +609,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               >
                 {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Enviar Enlace de Recuperación</span>}
               </button>
+
+              {previewResetUrl && (
+                <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1.5 animate-in fade-in">
+                  <p className="font-bold">Enlace de recuperación generado para pruebas:</p>
+                  <a
+                    href={previewResetUrl}
+                    onClick={() => {
+                      onClose();
+                      window.location.hash = previewResetUrl.split('#')[1] || '';
+                    }}
+                    className="inline-block text-xs font-bold text-amber-700 hover:text-amber-900 underline"
+                  >
+                    Abrir formulario de restablecimiento &rarr;
+                  </a>
+                </div>
+              )}
 
               <div className="text-center text-xs">
                 <button

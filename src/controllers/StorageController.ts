@@ -642,8 +642,15 @@ export class StorageController {
 
   /**
    * Send password reset request
+   * Send password reset request (real email or recovery token)
    */
-  static async sendPasswordReset(email: string): Promise<{ success: boolean; error?: string }> {
+  static async sendPasswordReset(email: string): Promise<{
+    success: boolean;
+    error?: string;
+    message?: string;
+    previewResetUrl?: string;
+    mailConfigured?: boolean;
+  }> {
     const cleanEmail = (email || '').trim().toLowerCase();
     const emailCheck = validateEmail(cleanEmail);
     if (!emailCheck.isValid) {
@@ -657,14 +664,83 @@ export class StorageController {
         body: JSON.stringify({ email: cleanEmail })
       });
 
-      if (res.ok) {
-        return { success: true };
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        return {
+          success: true,
+          message: data.message,
+          previewResetUrl: data.previewResetUrl,
+          mailConfigured: data.mailConfigured
+        };
       }
 
-      const data = await res.json().catch(() => null);
-      return { success: false, error: data?.error || 'No se pudo procesar la solicitud.' };
+      return {
+        success: false,
+        error: data?.error || 'No se pudo procesar la solicitud de recuperación.'
+      };
     } catch (err: any) {
-      return { success: false, error: 'Error de conexión al procesar la solicitud.' };
+      return {
+        success: false,
+        error: 'No se pudo conectar con el servidor para procesar la recuperación. Verifica tu conexión.'
+      };
+    }
+  }
+
+  /**
+   * Verify whether a password reset token is valid and active
+   */
+  static async verifyResetToken(token: string): Promise<{ valid: boolean; email?: string; error?: string }> {
+    if (!token) {
+      return { valid: false, error: 'Token de recuperación no proporcionado.' };
+    }
+
+    try {
+      const res = await fetch(`/api/auth/verify-reset-token?token=${encodeURIComponent(token)}`);
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.valid) {
+        return { valid: true, email: data.email };
+      }
+
+      return { valid: false, error: data?.error || 'Enlace de recuperación inválido o expirado.' };
+    } catch (err: any) {
+      return { valid: false, error: 'Error de conexión al validar el enlace de recuperación.' };
+    }
+  }
+
+  /**
+   * Reset account password using verified token
+   */
+  static async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; error?: string; message?: string }> {
+    if (!token) {
+      return { success: false, error: 'Token de recuperación no válido.' };
+    }
+
+    if (!isPasswordValid(newPassword)) {
+      const missing = getMissingPasswordRequirements(newPassword);
+      return {
+        success: false,
+        error: `La nueva contraseña no cumple los requisitos: ${missing.join(', ')}.`
+      };
+    }
+
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        return { success: true, message: data.message };
+      }
+
+      return { success: false, error: data?.error || 'No se pudo restablecer la contraseña.' };
+    } catch (err: any) {
+      return { success: false, error: 'Error de red al actualizar la contraseña.' };
     }
   }
 
