@@ -1,9 +1,12 @@
 import { 
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signInWithPopup, 
   GoogleAuthProvider,
   signOut as firebaseSignOut
 } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
 import { User, TestResult } from '../types';
 import { 
   validateEmail, 
@@ -16,6 +19,13 @@ const ACTIVE_USER_EMAIL_KEY = 'vocaccion_active_user_email';
 const ACTIVE_SESSION_FLAG = 'vocaccion_session_authenticated';
 const CACHED_USER_KEY = 'vocaccion_cached_user';
 const AUTH_TOKEN_KEY = 'vocaccion_auth_token';
+
+const ADMIN_EMAILS = [
+  'nicoleilincastaneda@gmail.com',
+  'perezcastanedamelaniyulieth@gmail.com',
+  'lunismariana02@gmail.com',
+  'eileentovarc.25@gmail.com'
+];
 
 export const INITIAL_DEMO_USER: User = {
   id: 'user-demo-valentina',
@@ -189,7 +199,12 @@ export class StorageController {
   }
 
   /**
-   * Registro oficial de estudiante: valida campos, llama al endpoint backend seguro
+   * Registro oficial de estudiante:
+   * 1. Valida campos y requisitos de seguridad.
+   * 2. Intenta el endpoint del backend (/api/auth/register).
+   * 3. Si el endpoint retorna 404 (típico en despliegues estáticos de Vercel) o error de red,
+   *    ejecuta el fallback con Firebase Auth y Firestore directamente.
+   * 4. Registra detalles precisos en console.error y muestra el mensaje real devuelto.
    */
   static async registerUser(data: {
     name: string;
@@ -200,30 +215,30 @@ export class StorageController {
     city?: string;
     country?: string;
   }): Promise<{ user: User | null; error?: string }> {
+    const cleanName = (data.name || '').trim();
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+
+    if (!cleanName) {
+      return { user: null, error: 'Por favor ingresa tu nombre completo.' };
+    }
+
+    // 1. Strict Email Format Validation
+    const emailCheck = validateEmail(cleanEmail);
+    if (!emailCheck.isValid) {
+      return { user: null, error: emailCheck.error || 'Formato de correo inválido.' };
+    }
+
+    // 2. Strict Password Requirements Validation
+    if (!isPasswordValid(data.password)) {
+      const missing = getMissingPasswordRequirements(data.password);
+      return {
+        user: null,
+        error: `La contraseña no cumple los requisitos de seguridad: ${missing.join(', ')}.`
+      };
+    }
+
+    // 3. Try Express API first
     try {
-      const cleanName = (data.name || '').trim();
-      const cleanEmail = (data.email || '').trim().toLowerCase();
-
-      if (!cleanName) {
-        return { user: null, error: 'Por favor ingresa tu nombre completo.' };
-      }
-
-      // 1. Strict Email Format Validation
-      const emailCheck = validateEmail(cleanEmail);
-      if (!emailCheck.isValid) {
-        return { user: null, error: emailCheck.error || 'Formato de correo inválido.' };
-      }
-
-      // 2. Strict Password Requirements Validation
-      if (!isPasswordValid(data.password)) {
-        const missing = getMissingPasswordRequirements(data.password);
-        return {
-          user: null,
-          error: `La contraseña no cumple los requisitos de seguridad: ${missing.join(', ')}.`
-        };
-      }
-
-      // 3. Register via Express API
       const serverRes = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -250,41 +265,144 @@ export class StorageController {
         }
       }
 
-      const errData = await serverRes.json().catch(() => null);
+      // Si el endpoint no existe en Vercel (404), recurrir a Firebase Authentication
+      if (serverRes.status === 404) {
+        console.warn(
+          `[VocAcción Auth] Endpoint /api/auth/register retornó 404 en el servidor actual (despliegue estático en Vercel). ` +
+          `Activando fallback directo a Firebase Auth...`
+        );
+        return await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
+      }
+
+      // Extraer y reportar el mensaje de error exacto del servidor
+      const rawText = await serverRes.text();
+      let serverErrorMsg = '';
+      try {
+        const parsed = JSON.parse(rawText);
+        serverErrorMsg = parsed.error || parsed.message || '';
+      } catch (_) {
+        serverErrorMsg = rawText ? rawText.slice(0, 200) : '';
+      }
+
+      const finalError = serverErrorMsg || `Error HTTP ${serverRes.status} al procesar el registro en el servidor.`;
       return {
         user: null,
-        error: errData?.error || 'No se pudo crear la cuenta. Por favor verifica tus datos o intenta más tarde.'
+        error: finalError
       };
-    } catch (err: any) {
-      console.error('Registration network error:', err);
-      return {
-        user: null,
-        error: 'No se pudo conectar con el servidor para registrar tu cuenta. Verifica tu conexión a internet.'
-      };
+    } catch (networkErr: any) {
+      console.warn('[VocAcción Auth] Fallo al alcanzar /api/auth/register:', networkErr);
+      console.info('[VocAcción Auth] Intentando fallback con Firebase Authentication...');
+      try {
+        return await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
+      } catch (fbErr: any) {
+        console.error('[VocAcción Auth Fallback Error]', fbErr);
+        return {
+          user: null,
+          error: `Error de conexión: No se pudo conectar con el backend ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
+        };
+      }
     }
   }
 
   /**
-   * Inicio de sesión de usuario: verifica credenciales mediante el backend seguro
+   * Registro directo vía Firebase Authentication y Firestore (Modo cliente/Vercel)
+   */
+  private static async registerWithFirebaseAuth(
+    data: {
+      password: string;
+      age?: number;
+      educationLevel?: string;
+      city?: string;
+      country?: string;
+    },
+    cleanName: string,
+    cleanEmail: string
+  ): Promise<{ user: User | null; error?: string }> {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, data.password);
+      const fbUser = userCredential.user;
+
+      const isAdminEmail = ADMIN_EMAILS.includes(cleanEmail);
+
+      const avatarGradients = [
+        'bg-gradient-to-tr from-pink-400 to-purple-500',
+        'bg-gradient-to-tr from-purple-400 to-indigo-500',
+        'bg-gradient-to-tr from-rose-400 to-amber-500',
+        'bg-gradient-to-tr from-fuchsia-400 to-pink-500',
+        'bg-gradient-to-tr from-violet-500 to-purple-600'
+      ];
+      const randomGradient = avatarGradients[Math.floor(Math.random() * avatarGradients.length)];
+
+      const newUser: User = {
+        id: fbUser.uid,
+        name: cleanName,
+        email: cleanEmail,
+        role: isAdminEmail ? 'admin' : 'user',
+        status: 'active',
+        age: data.age || 17,
+        educationLevel: data.educationLevel || 'Último año de Bachillerato / Secundaria',
+        city: data.city ? data.city.trim() : '',
+        country: data.country ? data.country.trim() : 'Colombia',
+        avatarColor: randomGradient,
+        createdAt: new Date().toISOString(),
+        savedCareers: [],
+        savedUniversities: [],
+        savedScholarships: [],
+        testHistory: [],
+        answeredQuestionIds: []
+      };
+
+      try {
+        await setDoc(doc(db, 'users', fbUser.uid), newUser);
+      } catch (fsErr) {
+        console.warn('[VocAcción Firestore Warning] Perfil guardado localmente (Firestore sync pendiente):', fsErr);
+      }
+
+      this.notifyListeners(newUser);
+      return { user: newUser };
+    } catch (fbErr: any) {
+      console.warn('[VocAcción Firebase Auth Register Warning]', fbErr);
+      let errorMsg = 'Error en Firebase Auth: ' + (fbErr?.message || 'Error desconocido.');
+
+      if (fbErr?.code === 'auth/email-already-in-use') {
+        errorMsg = 'Ya existe una cuenta registrada con este correo electrónico. Por favor inicia sesión.';
+      } else if (fbErr?.code === 'auth/weak-password') {
+        errorMsg = 'La contraseña debe tener un mínimo de 6 caracteres.';
+      } else if (fbErr?.code === 'auth/invalid-email') {
+        errorMsg = 'El formato del correo electrónico ingresado no es válido.';
+      } else if (fbErr?.code === 'auth/operation-not-allowed') {
+        errorMsg = 'El proveedor de Correo/Contraseña no está habilitado en Firebase Authentication Console.';
+      }
+
+      return { user: null, error: errorMsg };
+    }
+  }
+
+  /**
+   * Inicio de sesión de usuario:
+   * 1. Verifica credenciales contra el backend (/api/auth/login).
+   * 2. Si el endpoint retorna 404 (Vercel estático) o fallo de red,
+   *    ejecuta el fallback con Firebase Auth signInWithEmailAndPassword.
+   * 3. Registra logs claros con console.error para facilitar depuración en Vercel y DevTools.
    */
   static async loginUser(
     email: string,
     password: string
   ): Promise<{ user: User | null; error?: string }> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+
+    // 1. Basic format validation
+    const emailCheck = validateEmail(cleanEmail);
+    if (!emailCheck.isValid) {
+      return { user: null, error: emailCheck.error || 'Correo electrónico inválido.' };
+    }
+
+    if (!password) {
+      return { user: null, error: 'Por favor ingresa tu contraseña.' };
+    }
+
+    // 2. Login through Express Auth API
     try {
-      const cleanEmail = (email || '').trim().toLowerCase();
-
-      // 1. Basic format validation
-      const emailCheck = validateEmail(cleanEmail);
-      if (!emailCheck.isValid) {
-        return { user: null, error: emailCheck.error || 'Correo electrónico inválido.' };
-      }
-
-      if (!password) {
-        return { user: null, error: 'Por favor ingresa tu contraseña.' };
-      }
-
-      // 2. Login through Express Auth API
       const serverRes = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,17 +421,105 @@ export class StorageController {
         }
       }
 
-      const errData = await serverRes.json().catch(() => null);
+      // Si el endpoint no existe en Vercel (404), usar Firebase Auth directamente
+      if (serverRes.status === 404) {
+        console.warn(
+          `[VocAcción Auth] Endpoint /api/auth/login retornó 404 (despliegue estático en Vercel). ` +
+          `Activando fallback directo a Firebase Auth...`
+        );
+        return await this.loginWithFirebaseAuth(cleanEmail, password);
+      }
+
+      const rawText = await serverRes.text();
+      let serverErrorMsg = '';
+      try {
+        const parsed = JSON.parse(rawText);
+        serverErrorMsg = parsed.error || parsed.message || '';
+      } catch (_) {
+        serverErrorMsg = rawText ? rawText.slice(0, 200) : '';
+      }
+
+      const finalError = serverErrorMsg || 'Correo o contraseña incorrectos. Verifica tus credenciales o crea una cuenta nueva.';
       return {
         user: null,
-        error: errData?.error || 'Correo o contraseña incorrectos. Verifica tus credenciales o crea una cuenta nueva.'
+        error: finalError
       };
-    } catch (err: any) {
-      console.error('Login network error:', err);
-      return {
-        user: null,
-        error: 'No se pudo conectar con el servidor. Verifica tu conexión a internet e inténtalo de nuevo.'
+    } catch (networkErr: any) {
+      console.warn('[VocAcción Auth] Fallo al alcanzar /api/auth/login:', networkErr);
+      console.info('[VocAcción Auth] Intentando inicio de sesión con Firebase Authentication...');
+      try {
+        return await this.loginWithFirebaseAuth(cleanEmail, password);
+      } catch (fbErr: any) {
+        console.error('[VocAcción Auth Login Fallback Error]', fbErr);
+        return {
+          user: null,
+          error: `Error de inicio de sesión: No se pudo conectar con el backend ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
+        };
+      }
+    }
+  }
+
+  /**
+   * Inicio de sesión directo vía Firebase Authentication y Firestore (Modo cliente/Vercel)
+   */
+  private static async loginWithFirebaseAuth(
+    cleanEmail: string,
+    password: string
+  ): Promise<{ user: User | null; error?: string }> {
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      const fbUser = userCredential.user;
+
+      const isAdminEmail = ADMIN_EMAILS.includes(cleanEmail);
+
+      let profileData: any = null;
+      try {
+        const snap = await getDoc(doc(db, 'users', fbUser.uid));
+        if (snap.exists()) {
+          profileData = snap.data();
+        }
+      } catch (fsErr) {
+        console.warn('[VocAcción Firestore Warning] Perfil no obtenido de Firestore:', fsErr);
+      }
+
+      const user: User = {
+        id: fbUser.uid,
+        email: cleanEmail,
+        name: profileData?.name || fbUser.displayName || 'Estudiante VocAcción',
+        role: profileData?.role || (isAdminEmail ? 'admin' : 'user'),
+        status: profileData?.status || 'active',
+        age: profileData?.age || 17,
+        educationLevel: profileData?.educationLevel || 'Último año de Bachillerato / Secundaria',
+        city: profileData?.city || '',
+        country: profileData?.country || 'Colombia',
+        avatarColor: profileData?.avatarColor || 'bg-gradient-to-tr from-pink-400 to-purple-500',
+        createdAt: profileData?.createdAt || new Date().toISOString(),
+        savedCareers: profileData?.savedCareers || [],
+        savedUniversities: profileData?.savedUniversities || [],
+        savedScholarships: profileData?.savedScholarships || [],
+        testHistory: profileData?.testHistory || [],
+        answeredQuestionIds: profileData?.answeredQuestionIds || []
       };
+
+      this.notifyListeners(user);
+      return { user };
+    } catch (fbErr: any) {
+      console.warn('[VocAcción Firebase Auth Login Warning]', fbErr);
+      let errorMsg = 'Error al iniciar sesión: ' + (fbErr?.message || 'Error de credenciales.');
+
+      if (
+        fbErr?.code === 'auth/invalid-credential' ||
+        fbErr?.code === 'auth/wrong-password' ||
+        fbErr?.code === 'auth/user-not-found'
+      ) {
+        errorMsg = 'Correo o contraseña incorrectos. Verifica tus credenciales o crea una cuenta nueva.';
+      } else if (fbErr?.code === 'auth/too-many-requests') {
+        errorMsg = 'Demasiados intentos fallidos. Tu cuenta ha sido bloqueada temporalmente por seguridad.';
+      } else if (fbErr?.code === 'auth/invalid-email') {
+        errorMsg = 'El formato del correo electrónico ingresado no es válido.';
+      }
+
+      return { user: null, error: errorMsg };
     }
   }
 
@@ -330,34 +536,40 @@ export class StorageController {
       const cleanEmail = (fbUser.email || '').trim().toLowerCase();
 
       // Synchronize with server backend to obtain token and unified User object
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          uid: fbUser.uid,
-          email: cleanEmail,
-          displayName: fbUser.displayName || 'Estudiante'
-        })
-      });
+      try {
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: fbUser.uid,
+            email: cleanEmail,
+            displayName: fbUser.displayName || 'Estudiante'
+          })
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.token) {
-          sessionStorage.setItem(AUTH_TOKEN_KEY, data.token);
-          localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) {
+            sessionStorage.setItem(AUTH_TOKEN_KEY, data.token);
+            localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+          }
+          if (data.user) {
+            this.notifyListeners(data.user);
+            return { user: data.user };
+          }
         }
-        if (data.user) {
-          this.notifyListeners(data.user);
-          return { user: data.user };
-        }
+      } catch (syncErr) {
+        console.warn('[VocAcción Auth] Fallo al sincronizar Google con backend Express:', syncErr);
       }
+
+      const isAdminEmail = ADMIN_EMAILS.includes(cleanEmail);
 
       // Fallback local construct if server returned unexpected payload
       const fallbackUser: User = {
         id: fbUser.uid,
         name: fbUser.displayName || 'Estudiante VocAcción',
         email: cleanEmail,
-        role: 'user',
+        role: isAdminEmail ? 'admin' : 'user',
         status: 'active',
         age: 17,
         educationLevel: 'Último año de Bachillerato / Secundaria',
@@ -371,6 +583,12 @@ export class StorageController {
         testHistory: [],
         answeredQuestionIds: []
       };
+
+      try {
+        await setDoc(doc(db, 'users', fbUser.uid), fallbackUser, { merge: true });
+      } catch (fsErr) {
+        console.warn('[VocAcción Firestore Warning] Google profile sync to Firestore skipped:', fsErr);
+      }
 
       this.notifyListeners(fallbackUser);
       return { user: fallbackUser };
@@ -480,6 +698,15 @@ export class StorageController {
       console.warn('Could not sync profile with server:', err);
     }
 
+    // Also sync to Firestore if user is authenticated in Firebase
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), data, { merge: true });
+      } catch (fsErr) {
+        console.warn('Could not sync profile with Firestore:', fsErr);
+      }
+    }
+
     // Optimistic / offline update
     const updatedUser: User = { ...this.currentUser, ...data };
     this.notifyListeners(updatedUser);
@@ -527,6 +754,18 @@ export class StorageController {
       testHistory: updatedHistory,
       answeredQuestionIds: merged
     };
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          testHistory: updatedHistory,
+          answeredQuestionIds: merged
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn('Could not sync test to Firestore:', fsErr);
+      }
+    }
+
     this.notifyListeners(updated);
     return updated;
   }
@@ -579,6 +818,17 @@ export class StorageController {
       ...this.currentUser,
       [listKey]: updatedList
     };
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          [listKey]: updatedList
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn('Could not sync favorites to Firestore:', fsErr);
+      }
+    }
+
     this.notifyListeners(updated);
     return updated;
   }
@@ -614,6 +864,17 @@ export class StorageController {
       ...this.currentUser,
       testHistory: filtered
     };
+
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          testHistory: filtered
+        }, { merge: true });
+      } catch (fsErr) {
+        console.warn('Could not delete test in Firestore:', fsErr);
+      }
+    }
+
     this.notifyListeners(updated);
     return updated;
   }
@@ -629,8 +890,19 @@ export class StorageController {
         return data.user || null;
       }
     } catch (err) {
-      console.warn('Could not fetch user profile:', err);
+      console.warn('Could not fetch user profile from server:', err);
     }
+
+    // Try Firestore
+    try {
+      const snap = await getDoc(doc(db, 'users', uidOrEmail));
+      if (snap.exists()) {
+        return snap.data() as User;
+      }
+    } catch (fsErr) {
+      console.warn('Could not fetch user profile from Firestore:', fsErr);
+    }
+
     return null;
   }
 }

@@ -242,10 +242,24 @@ export const WelcomeAuthView: React.FC<WelcomeAuthViewProps> = ({
             {errorMsg && (
               <div 
                 id="auth-error-banner"
-                className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-2.5 animate-in fade-in duration-200"
+                className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex flex-col gap-1.5 animate-in fade-in duration-200"
               >
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <span className="flex-1 leading-relaxed">{errorMsg}</span>
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+                  <span className="flex-1 leading-relaxed">{errorMsg}</span>
+                </div>
+                {errorMsg.includes('Ya existe una cuenta') && mode === 'register' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearMessages();
+                      setMode('login');
+                    }}
+                    className="self-start text-xs font-bold text-purple-700 hover:text-purple-900 underline ml-6 cursor-pointer"
+                  >
+                    Iniciar sesión con este correo &rarr;
+                  </button>
+                )}
               </div>
             )}
 

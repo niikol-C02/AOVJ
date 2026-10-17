@@ -248,7 +248,75 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (res.ok) {
         const data = await res.json();
         setConstantsList(data.constants || []);
+        return;
       }
+      // Fallback constants si la API responde 404 (ej: Vercel modo estático)
+      const fallbackConstants: SystemConstant[] = [
+        {
+          key: 'MIN_VOCATIONAL_MATCH_PERCENTAGE',
+          value: '55',
+          category: 'vocational',
+          description: 'Porcentaje mínimo de afinidad para recomendar una carrera al estudiante',
+          dataType: 'number',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'RIASEC_WEIGHT_ALGORITHM',
+          value: 'balanced',
+          category: 'vocational',
+          description: 'Modelo de cálculo para dimensiones de Holland (balanced, intensive o conservative)',
+          dataType: 'string',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'MAX_COMPARE_CAREERS_LIMIT',
+          value: '3',
+          category: 'limits',
+          description: 'Límite máximo de carreras que un usuario puede añadir al comparador interactivo',
+          dataType: 'number',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'SESSION_EXPIRATION_HOURS',
+          value: '72',
+          category: 'security',
+          description: 'Tiempo de vida en horas del token de sesión autenticada',
+          dataType: 'number',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'ALLOW_GUEST_TEST_EXPLORATION',
+          value: 'true',
+          category: 'platform',
+          description: 'Permite a visitantes sin cuenta resolver un test preliminar antes de registrarse',
+          dataType: 'boolean',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'TTS_SPEECH_DEFAULT_RATE',
+          value: '0.95',
+          category: 'platform',
+          description: 'Velocidad de locución predeterminada para el motor de voz (0.5 a 1.5)',
+          dataType: 'number',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        },
+        {
+          key: 'PLATFORM_STATUS_BANNER',
+          value: 'operational',
+          category: 'platform',
+          description: 'Estado global del servicio: operational, maintenance o admissions_active',
+          dataType: 'string',
+          updatedAt: new Date().toISOString(),
+          updatedBy: 'system'
+        }
+      ];
+      setConstantsList(fallbackConstants);
     } catch (err) {
       console.error('Error loading constants:', err);
     }
@@ -429,6 +497,39 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (res.ok) {
         const data = await res.json();
         setUsersList(data.users || []);
+        return;
+      }
+
+      // Fallback a Firestore para despliegues estáticos en Vercel
+      if (res.status === 404) {
+        try {
+          const { collection, getDocs } = await import('firebase/firestore');
+          const { db } = await import('../lib/firebase');
+          const snap = await getDocs(collection(db, 'users'));
+          const fsUsers: any[] = [];
+          snap.forEach(docSnap => {
+            const u = docSnap.data();
+            fsUsers.push({
+              id: docSnap.id,
+              name: u.name || 'Estudiante',
+              email: u.email || '',
+              role: u.role || 'user',
+              status: u.status || 'active',
+              age: u.age || 17,
+              educationLevel: u.educationLevel || 'Secundaria / Bachillerato',
+              city: u.city || '',
+              country: u.country || 'Colombia',
+              createdAt: u.createdAt || new Date().toISOString(),
+              testsCount: (u.testHistory || []).length,
+              savedCareersCount: (u.savedCareers || []).length
+            });
+          });
+          if (fsUsers.length > 0) {
+            setUsersList(fsUsers);
+          }
+        } catch (fsErr) {
+          console.warn('[AdminDashboard] Fallback Firestore users:', fsErr);
+        }
       }
     } catch (err) {
       console.error('Error loading users:', err);

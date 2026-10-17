@@ -200,9 +200,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Content body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4">
           {errorMsg && (
-            <div className="p-3.5 rounded-2xl bg-rose-50/80 backdrop-blur-sm border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-              <KeyRound className="w-4 h-4 shrink-0" />
-              <span>{errorMsg}</span>
+            <div className="p-3.5 rounded-2xl bg-rose-50/80 backdrop-blur-sm border border-rose-200 text-rose-700 text-xs flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <KeyRound className="w-4 h-4 shrink-0 text-rose-500" />
+                <span className="font-medium">{errorMsg}</span>
+              </div>
+              {errorMsg.includes('Ya existe una cuenta') && mode === 'register' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg('');
+                    setMode('login');
+                  }}
+                  className="self-start text-xs font-bold text-purple-700 hover:text-purple-900 underline flex items-center gap-1 mt-0.5 cursor-pointer"
+                >
+                  Iniciar sesión directamente con este correo &rarr;
+                </button>
+              )}
             </div>
           )}
 
