@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import path from 'node:path';
-import { createServer as createViteServer } from 'vite';
 import {
   getDb,
   registerDbUser,
@@ -55,8 +54,12 @@ import {
 const app = express();
 const PORT = 3000;
 
-// Initialize DB schema on boot
-getDb();
+// Initialize DB schema on boot safely
+try {
+  getDb();
+} catch (dbBootErr) {
+  console.warn('[VocAcción DB] Warning initializing database on boot:', dbBootErr);
+}
 
 // Body parser
 app.use(express.json());
@@ -917,6 +920,7 @@ app.all(['/api/*', '/auth/*'], (req: Request, res: Response) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
