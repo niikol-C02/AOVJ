@@ -41,15 +41,36 @@ export function isEmailAdmin(email: string): boolean {
 
 let dbInstance: DatabaseSync | null = null;
 
+function resolveDatabasePath(): string {
+  // If running on Vercel or serverless where cwd is read-only, use /tmp
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    const tmpDir = path.join('/tmp', 'vocaccion-data');
+    if (!fs.existsSync(tmpDir)) {
+      try { fs.mkdirSync(tmpDir, { recursive: true }); } catch (_) {}
+    }
+    return path.join(tmpDir, 'vocaccion.db');
+  }
+
+  const defaultDir = path.join(process.cwd(), 'data');
+  try {
+    if (!fs.existsSync(defaultDir)) {
+      fs.mkdirSync(defaultDir, { recursive: true });
+    }
+    return path.join(defaultDir, 'vocaccion.db');
+  } catch (err) {
+    // Fallback to /tmp if process.cwd() is read-only
+    const tmpDir = path.join('/tmp', 'vocaccion-data');
+    if (!fs.existsSync(tmpDir)) {
+      try { fs.mkdirSync(tmpDir, { recursive: true }); } catch (_) {}
+    }
+    return path.join(tmpDir, 'vocaccion.db');
+  }
+}
+
 export function getDb(): DatabaseSync {
   if (dbInstance) return dbInstance;
 
-  const dataDir = path.join(process.cwd(), 'data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-
-  const dbPath = path.join(dataDir, 'vocaccion.db');
+  const dbPath = resolveDatabasePath();
   dbInstance = new DatabaseSync(dbPath);
 
   // Initialize SQLite schema
