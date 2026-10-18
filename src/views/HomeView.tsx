@@ -1,7 +1,6 @@
 import React from 'react';
 import { Career, TestResult, User, ViewType } from '../types';
 import { DailyTipCard } from '../components/DailyTipCard';
-import { DailyChallengeWidget } from '../components/DailyChallengeWidget';
 import { TEST_CATEGORIES_DATA } from '../models/adaptiveTestBank';
 import { 
   Sparkles, 
@@ -150,9 +149,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         </section>
       )}
-
-      {/* Pregunta o Dinámica del Día Interactiva */}
-      <DailyChallengeWidget onShowToast={onShowToast} />
 
       {/* 4 Feature Modules Grid */}
       <section className="space-y-4">

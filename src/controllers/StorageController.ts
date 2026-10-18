@@ -76,6 +76,16 @@ export const INITIAL_DEMO_USER: User = {
   answeredQuestionIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 };
 
+export function getApiBase(): string {
+  try {
+    const metaEnv = (import.meta as any)?.env;
+    if (metaEnv && metaEnv.VITE_API_URL) {
+      return String(metaEnv.VITE_API_URL).replace(/\/$/, '');
+    }
+  } catch (_) {}
+  return '';
+}
+
 export class StorageController {
   private static currentUser: User | null = null;
   private static authListeners: ((user: User | null) => void)[] = [];
@@ -147,7 +157,7 @@ export class StorageController {
 
     // 1. Verify via Server-side Bearer token
     if (token) {
-      fetch('/api/auth/me', {
+      fetch(`${getApiBase()}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` }
       })
         .then(res => {
@@ -239,7 +249,7 @@ export class StorageController {
 
     // 3. Try Express API first
     try {
-      const serverRes = await fetch('/api/auth/register', {
+      const serverRes = await fetch(`${getApiBase()}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -265,13 +275,20 @@ export class StorageController {
         }
       }
 
-      // Si el endpoint no existe en Vercel (404), recurrir a Firebase Authentication
-      if (serverRes.status === 404) {
+      // Si el endpoint no existe o el host bloquea POST (404 o 405 en Vercel estático), recurrir a Firebase Authentication
+      if (serverRes.status === 404 || serverRes.status === 405) {
         console.warn(
-          `[VocAcción Auth] Endpoint /api/auth/register retornó 404 en el servidor actual (despliegue estático en Vercel). ` +
+          `[VocAcción Auth] Endpoint /api/auth/register retornó HTTP ${serverRes.status} en el host actual. ` +
           `Activando fallback directo a Firebase Auth...`
         );
-        return await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
+        const fbResult = await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
+        if (fbResult.user) {
+          return fbResult;
+        }
+        // Si Firebase tampoco pudo registrarlo (ej: auth/operation-not-allowed), reportar error claro
+        if (fbResult.error) {
+          return fbResult;
+        }
       }
 
       // Extraer y reportar el mensaje de error exacto del servidor
@@ -284,7 +301,7 @@ export class StorageController {
         serverErrorMsg = rawText ? rawText.slice(0, 200) : '';
       }
 
-      const finalError = serverErrorMsg || `Error HTTP ${serverRes.status} al procesar el registro en el servidor.`;
+      const finalError = serverErrorMsg || `Error HTTP ${serverRes.status} al procesar el registro en el servidor. Verifica tu conexión o configuración.`;
       return {
         user: null,
         error: finalError
@@ -298,7 +315,7 @@ export class StorageController {
         console.error('[VocAcción Auth Fallback Error]', fbErr);
         return {
           user: null,
-          error: `Error de conexión: No se pudo conectar con el backend ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
+          error: `Error de conexión: No se pudo conectar con el servidor de autenticación ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
         };
       }
     }
@@ -403,7 +420,7 @@ export class StorageController {
 
     // 2. Login through Express Auth API
     try {
-      const serverRes = await fetch('/api/auth/login', {
+      const serverRes = await fetch(`${getApiBase()}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password })
@@ -421,13 +438,19 @@ export class StorageController {
         }
       }
 
-      // Si el endpoint no existe en Vercel (404), usar Firebase Auth directamente
-      if (serverRes.status === 404) {
+      // Si el endpoint no existe o el host bloquea POST (404 o 405 en Vercel estático), usar Firebase Auth directamente
+      if (serverRes.status === 404 || serverRes.status === 405) {
         console.warn(
-          `[VocAcción Auth] Endpoint /api/auth/login retornó 404 (despliegue estático en Vercel). ` +
+          `[VocAcción Auth] Endpoint /api/auth/login retornó HTTP ${serverRes.status} en el host actual. ` +
           `Activando fallback directo a Firebase Auth...`
         );
-        return await this.loginWithFirebaseAuth(cleanEmail, password);
+        const fbResult = await this.loginWithFirebaseAuth(cleanEmail, password);
+        if (fbResult.user) {
+          return fbResult;
+        }
+        if (fbResult.error) {
+          return fbResult;
+        }
       }
 
       const rawText = await serverRes.text();
@@ -453,7 +476,7 @@ export class StorageController {
         console.error('[VocAcción Auth Login Fallback Error]', fbErr);
         return {
           user: null,
-          error: `Error de inicio de sesión: No se pudo conectar con el backend ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
+          error: `Error de inicio de sesión: No se pudo conectar con el servidor de autenticación ni con Firebase Auth (${fbErr?.message || networkErr?.message}).`
         };
       }
     }
@@ -537,7 +560,7 @@ export class StorageController {
 
       // Synchronize with server backend to obtain token and unified User object
       try {
-        const res = await fetch('/api/auth/google', {
+        const res = await fetch(`${getApiBase()}/api/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -617,7 +640,7 @@ export class StorageController {
   static async logout(): Promise<void> {
     const token = this.getAuthToken();
     if (token) {
-      fetch('/api/auth/logout', {
+      fetch(`${getApiBase()}/api/auth/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` }
       }).catch(() => {});
@@ -658,7 +681,7 @@ export class StorageController {
     }
 
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch(`${getApiBase()}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail })
@@ -696,7 +719,7 @@ export class StorageController {
     }
 
     try {
-      const res = await fetch(`/api/auth/verify-reset-token?token=${encodeURIComponent(token)}`);
+      const res = await fetch(`${getApiBase()}/api/auth/verify-reset-token?token=${encodeURIComponent(token)}`);
       const data = await res.json().catch(() => null);
 
       if (res.ok && data?.valid) {
@@ -726,7 +749,7 @@ export class StorageController {
     }
 
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const res = await fetch(`${getApiBase()}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, newPassword })

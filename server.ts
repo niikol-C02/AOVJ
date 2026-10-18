@@ -61,6 +61,22 @@ getDb();
 // Body parser
 app.use(express.json());
 
+// CORS and Vercel path rewriting support
+app.use((req: Request, res: Response, next) => {
+  const matchedPath = req.headers['x-matched-path'] as string;
+  if (matchedPath && matchedPath.startsWith('/api') && req.url === '/api') {
+    req.url = matchedPath;
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-matched-path');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // Auth helper middleware
 function getAuthToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
@@ -75,12 +91,12 @@ function getAuthToken(req: Request): string | null {
 // ----------------------------------------------------
 
 // Health check
-app.get('/api/health', (req: Request, res: Response) => {
+app.get(['/api/health', '/health'], (req: Request, res: Response) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
 
 // 1. Register User
-app.post('/api/auth/register', (req: Request, res: Response) => {
+app.post(['/api/auth/register', '/auth/register'], (req: Request, res: Response) => {
   try {
     const { name, email, password, age, educationLevel, city, country } = req.body;
 
@@ -124,7 +140,7 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 });
 
 // 2. Login User
-app.post('/api/auth/login', (req: Request, res: Response) => {
+app.post(['/api/auth/login', '/auth/login'], (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -149,7 +165,7 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 });
 
 // 3. Google Login / Sync
-app.post('/api/auth/google', (req: Request, res: Response) => {
+app.post(['/api/auth/google', '/auth/google'], (req: Request, res: Response) => {
   try {
     const { uid, email, displayName } = req.body;
 
@@ -169,7 +185,7 @@ app.post('/api/auth/google', (req: Request, res: Response) => {
 });
 
 // 4. Verify Active Session (Me)
-app.get('/api/auth/me', (req: Request, res: Response) => {
+app.get(['/api/auth/me', '/auth/me'], (req: Request, res: Response) => {
   try {
     const token = getAuthToken(req);
     if (!token) {
@@ -189,7 +205,7 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
 });
 
 // 5. Logout
-app.post('/api/auth/logout', (req: Request, res: Response) => {
+app.post(['/api/auth/logout', '/auth/logout'], (req: Request, res: Response) => {
   try {
     const token = getAuthToken(req);
     if (token) {
@@ -203,7 +219,7 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
 });
 
 // 6. Forgot Password (Request recovery link & email)
-app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
+app.post(['/api/auth/forgot-password', '/auth/forgot-password'], async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
     if (!email || typeof email !== 'string') {
@@ -247,7 +263,7 @@ app.post('/api/auth/forgot-password', async (req: Request, res: Response) => {
 });
 
 // 6.1 Verify Password Reset Token
-app.get('/api/auth/verify-reset-token', (req: Request, res: Response) => {
+app.get(['/api/auth/verify-reset-token', '/auth/verify-reset-token'], (req: Request, res: Response) => {
   try {
     const token = req.query.token as string;
     if (!token) {
@@ -267,7 +283,7 @@ app.get('/api/auth/verify-reset-token', (req: Request, res: Response) => {
 });
 
 // 6.2 Reset Password With Token
-app.post('/api/auth/reset-password', (req: Request, res: Response) => {
+app.post(['/api/auth/reset-password', '/auth/reset-password'], (req: Request, res: Response) => {
   try {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) {
@@ -886,6 +902,13 @@ app.get('/api/admin/daily-challenges/:id/stats', requireAdmin, (req: Request, re
   } catch (err: any) {
     return res.status(500).json({ error: 'Error al consultar respuestas de la dinámica.' });
   }
+});
+
+// Catch-all for undefined API routes (prevent falling through to static files which causes 405 on POST)
+app.all(['/api/*', '/auth/*'], (req: Request, res: Response) => {
+  return res.status(404).json({
+    error: `Ruta de API no encontrada: ${req.method} ${req.originalUrl || req.url}`
+  });
 });
 
 // ----------------------------------------------------
