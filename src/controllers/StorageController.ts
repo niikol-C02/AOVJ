@@ -51,6 +51,14 @@ function saveLocalAccountMap(email: string, account: LocalStoredAccount) {
   } catch (_) {}
 }
 
+function dispatchUserRegisteredEvent(user: User) {
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new CustomEvent('vocaccion_user_registered', { detail: { user } }));
+    } catch (_) {}
+  }
+}
+
 
 export const INITIAL_DEMO_USER: User = {
   id: 'user-demo-valentina',
@@ -158,6 +166,14 @@ export class StorageController {
    */
   static isAdmin(): boolean {
     return this.currentUser?.role === 'admin';
+  }
+
+  /**
+   * Obtiene todos los usuarios registrados localmente en el dispositivo (para sincronización con panel admin)
+   */
+  static getAllRegisteredUsers(): User[] {
+    const map = getLocalAccountsMap();
+    return Object.values(map).map(item => item.user);
   }
 
   /**
@@ -296,6 +312,7 @@ export class StorageController {
         }
         if (resData.user) {
           saveLocalAccountMap(cleanEmail, { user: resData.user, password: data.password });
+          dispatchUserRegisteredEvent(resData.user);
           this.notifyListeners(resData.user);
           return { user: resData.user };
         }
@@ -326,20 +343,24 @@ export class StorageController {
       const fbResult = await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
       if (fbResult.user) {
         saveLocalAccountMap(cleanEmail, { user: fbResult.user, password: data.password });
+        dispatchUserRegisteredEvent(fbResult.user);
         return fbResult;
       }
 
       // Si Firebase tampoco pudo registrarlo (ej: auth/operation-not-allowed), registrar de forma local segura:
       const localUser = this.createLocalStudentAccount(data, cleanName, cleanEmail);
+      dispatchUserRegisteredEvent(localUser);
       return { user: localUser };
     } catch (networkErr: any) {
       console.warn('[VocAcción Auth] Fallo al alcanzar /api/auth/register:', networkErr);
       const fbResult = await this.registerWithFirebaseAuth(data, cleanName, cleanEmail);
       if (fbResult.user) {
         saveLocalAccountMap(cleanEmail, { user: fbResult.user, password: data.password });
+        dispatchUserRegisteredEvent(fbResult.user);
         return fbResult;
       }
       const localUser = this.createLocalStudentAccount(data, cleanName, cleanEmail);
+      dispatchUserRegisteredEvent(localUser);
       return { user: localUser };
     }
   }
